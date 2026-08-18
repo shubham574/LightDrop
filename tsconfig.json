@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@optical-drop/shared/*": ["shared/dist/*"]
+    }
+  },
+  "exclude": ["node_modules", "dist", "client/node_modules", "server/node_modules", "shared/node_modules"],
+  "references": [
+    { "path": "./shared" },
+    { "path": "./client" },
+    { "path": "./server" }
+  ]
+}

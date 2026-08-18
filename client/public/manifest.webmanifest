@@ -1,0 +1,55 @@
+{
+  "name": "OpticalDrop — Send Files Through Light",
+  "short_name": "OpticalDrop",
+  "description": "Transfer files between devices using only a screen and a camera. No Wi-Fi. No Bluetooth. No pairing.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Receive File",
+      "short_name": "Receive",
+      "description": "Open camera to receive a file",
+      "url": "/receive",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Send File",
+      "short_name": "Send",
+      "description": "Select a file to send via QR codes",
+      "url": "/send",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}

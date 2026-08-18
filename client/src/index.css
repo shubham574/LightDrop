@@ -1,0 +1,177 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+    --card: 224 71% 7%;
+    --card-foreground: 213 31% 91%;
+    --popover: 224 71% 7%;
+    --popover-foreground: 213 31% 91%;
+    --primary: 152 100% 50%;
+    --primary-foreground: 224 71% 4%;
+    --secondary: 224 71% 12%;
+    --secondary-foreground: 213 31% 91%;
+    --muted: 224 71% 12%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 224 71% 12%;
+    --accent-foreground: 213 31% 91%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 213 31% 91%;
+    --border: 224 71% 18%;
+    --input: 224 71% 18%;
+    --ring: 152 100% 50%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/5 backdrop-blur-md border border-white/10;
+  }
+  .glass-strong {
+    @apply bg-white/10 backdrop-blur-lg border border-white/20;
+  }
+  .text-gradient {
+    @apply bg-gradient-to-r from-optical-green to-optical-cyan bg-clip-text text-transparent;
+  }
+  .border-gradient {
+    @apply border border-transparent bg-gradient-to-r from-optical-green/50 to-optical-cyan/50 bg-[length:100%_2px] bg-bottom bg-no-repeat;
+  }
+  .animate-scan {
+    animation: scan-line 2s linear infinite;
+  }
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+}
+
+.qr-canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.scan-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #00ff88, transparent);
+  animation: scan-line 2s linear infinite;
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 136, 0.3); }
+  50% { box-shadow: 0 0 40px rgba(0, 255, 136, 0.6); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.progress-ring {
+  transform: rotate(-90deg);
+}
+
+.progress-ring__circle {
+  transition: stroke-dashoffset 0.35s;
+  transform-origin: 50% 50%;
+}
+
+.camera-preview {
+  background: #000;
+}
+
+.scan-frame {
+  position: relative;
+}
+
+.scan-frame::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 2px solid #00ff88;
+  border-radius: 12px;
+  animation: pulse-glow 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.corner-marker {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border: 3px solid #00ff88;
+}
+
+.corner-marker.tl { top: -4px; left: -4px; border-right: none; border-bottom: none; }
+.corner-marker.tr { top: -4px; right: -4px; border-left: none; border-bottom: none; }
+.corner-marker.bl { bottom: -4px; left: -4px; border-right: none; border-top: none; }
+.corner-marker.br { bottom: -4px; right: -4px; border-left: none; border-top: none; }
+
+.btn-primary {
+  @apply px-6 py-3 bg-optical-green text-optical-darker font-semibold rounded-lg 
+         hover:bg-optical-green/90 transition-colors focus:outline-none focus:ring-2 
+         focus:ring-optical-green focus:ring-offset-2 focus:ring-offset-optical-darker
+         disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-secondary {
+  @apply px-6 py-3 bg-optical-panel text-white font-semibold rounded-lg border border-optical-border
+         hover:bg-optical-panel/80 hover:border-optical-green/50 transition-all 
+         focus:outline-none focus:ring-2 focus:ring-optical-green focus:ring-offset-2 
+         focus:ring-offset-optical-darker disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-ghost {
+  @apply px-4 py-2 text-optical-green font-medium rounded-lg 
+         hover:bg-optical-green/10 transition-colors 
+         focus:outline-none focus:ring-2 focus:ring-optical-green focus:ring-offset-2 
+         focus:ring-offset-optical-darker;
+}
+
+.input-field {
+  @apply w-full px-4 py-3 bg-optical-panel border border-optical-border rounded-lg 
+         text-white placeholder:text-muted-foreground 
+         focus:outline-none focus:ring-2 focus:ring-optical-green focus:border-transparent
+         transition-all;
+}
+
+.card-panel {
+  @apply bg-optical-panel/50 backdrop-blur-md border border-optical-border rounded-xl;
+}
+
+.section-title {
+  @apply text-3xl font-bold tracking-tight;
+}
+
+.section-subtitle {
+  @apply text-muted-foreground text-lg max-w-2xl;
+}

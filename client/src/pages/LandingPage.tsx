@@ -1,313 +1,108 @@
-'use client';
-
 import * as React from 'react';
-import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { QRDisplay } from '@/components/qr/QRDisplay';
-import { 
-  ArrowRight, 
-  Camera, 
-  WifiOff, 
-  Link as LinkIcon, 
-  CloudOff, 
-  Shield, 
-  CheckCircle,
-  Cpu,
-  Zap,
-  Eye,
-  Monitor,
-  Smartphone
-} from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { ArrowRight, ArrowDown } from 'lucide-react';
 
-const features = [
-  { icon: WifiOff, title: 'No Internet Required', description: 'Works completely offline. No network connection between devices.' },
-  { icon: LinkIcon, title: 'No Pairing', description: 'No Bluetooth pairing, no Wi-Fi Direct, no account creation needed.' },
-  { icon: CloudOff, title: 'No Cloud Storage', description: 'Your files never leave your device. Zero server-side storage.' },
-  { icon: Camera, title: 'Camera Only', description: 'Uses only the camera and screen. Works on any device with a browser.' },
-  { icon: Shield, title: 'End-to-End Local', description: 'Direct optical transfer. No intermediaries, no metadata leakage.' },
-  { icon: CheckCircle, title: 'Integrity Verified', description: 'SHA-256 checksum verification ensures file integrity.' },
-];
+function Header() {
+  const location = useLocation();
+  const currentPath = location.pathname;
 
-const steps = [
-  { number: '01', title: 'Select File', description: 'Choose any file up to 500MB on the sender device' },
-  { number: '02', title: 'Generate QR Frames', description: 'File is chunked, encoded, and displayed as animated QR codes' },
-  { number: '03', title: 'Scan with Camera', description: 'Point receiver camera at sender screen to capture frames' },
-  { number: '04', title: 'Reconstruct File', description: 'Frames are decoded, verified, and reassembled into original file' },
-];
+  return (
+    <header className="w-full min-h-[58px] flex items-center justify-between gap-4 px-[max(22px,env(safe-area-inset-right))] py-[14px] pl-[max(22px,env(safe-area-inset-left))] border-b border-decimen-line bg-decimen-bg/90 backdrop-blur-[14px] sticky top-0 z-10">
+      <Link to="/" className="inline-flex items-center gap-2.5 text-decimen-text text-[13px] font-extrabold uppercase tracking-[0.12em] uppercase no-underline">
+        <svg className="w-[22px] h-[22px] flex-none text-decimen-accent" viewBox="0 0 543 554.1" fill="currentColor" aria-hidden="true">
+          <g transform="translate(-241,789) scale(0.1,-0.1)">
+            <path d="M2410 6513 l0 -1378 103 101 c540 531 1324 986 1984 1153 402 102 850 95 1268 -21 529 -146 1300 -581 1860 -1050 175 -146 212 -184 199 -205 -37 -63 -502 -432 -754 -600 -969 -644 -1785 -844 -2590 -634 -667 174 -1376 581 -1947 1118 l-123 115 0 -1382 0 -1381 1478 4 c1291 3 1491 5 1588 20 1345 194 2240 1124 2355 2446 17 195 7 620 -19 786 -192 1236 -1030 2069 -2262 2249 -217 32 -411 36 -1772 36 l-1368 0 0 -1377z" />
+            <path d="M4945 5906 c-300 -68 -532 -287 -611 -577 -25 -89 -25 -289 0 -378 141 -513 724 -749 1179 -477 405 242 503 778 209 1148 -100 125 -258 229 -417 273 -82 22 -282 29 -360 11z" />
+          </g>
+        </svg>
+        Decimen Optical Transfer
+      </Link>
+      <nav className="flex gap-[3px] p-[3px] border border-decimen-line rounded-full uppercase text-[11px] tracking-[0.06em] text-decimen-muted font-mono">
+        <Link 
+          to="/send" 
+          className={`px-2.5 py-[3px] rounded-full border border-transparent transition-colors ${currentPath === '/send' ? 'text-decimen-text bg-decimen-panel border-decimen-line-bright' : 'hover:text-decimen-text focus-visible:text-decimen-text'}`}
+        >
+          Send
+        </Link>
+        <Link 
+          to="/receive" 
+          className={`px-2.5 py-[3px] rounded-full border border-transparent transition-colors ${currentPath === '/receive' ? 'text-decimen-text bg-decimen-panel border-decimen-line-bright' : 'hover:text-decimen-text focus-visible:text-decimen-text'}`}
+        >
+          Receive
+        </Link>
+      </nav>
+    </header>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="mt-8 flex flex-wrap items-center justify-between gap-y-2.5 gap-x-[18px] px-[max(22px,env(safe-area-inset-right))] py-4 pl-[max(22px,env(safe-area-inset-left))] border-t border-decimen-line text-decimen-muted-dim text-[11px] tracking-[0.04em]">
+      <span className="flex flex-col gap-[3px]">
+        <span>Decimen Optical Transfer</span>
+        <span>v1.0.0 · build local · © 2026</span>
+      </span>
+      <nav className="flex items-center gap-4 uppercase font-bold text-decimen-muted-dim hover:[&>a]:text-decimen-text transition-colors">
+        <a href="https://github.com/bashalarmistalt/decimen-optical-transfer">GitHub</a>
+      </nav>
+    </footer>
+  );
+}
 
 export function LandingPage() {
   return (
-    <div className="min-h-screen bg-optical-darker">
-      <nav className="fixed top-0 left-0 right-0 z-40 glass-strong border-b border-optical-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-optical-green/20 flex items-center justify-center">
-                <Camera className="w-5 h-5 text-optical-green" />
-              </div>
-              <span className="font-bold text-xl text-optical-green">OpticalDrop</span>
-            </div>
-            <div className="flex items-center gap-4">
-              <Link to="/about" className="text-sm text-muted-foreground hover:text-white transition-colors">About</Link>
-              <Link to="/privacy" className="text-sm text-muted-foreground hover:text-white transition-colors">Privacy</Link>
-              <Link to="/send" className="btn-primary">
-                <ArrowRight className="w-4 h-4 mr-2" />
-                Send a File
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <main className="pt-16">
-        <section className="relative min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-20 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-optical-green/5 via-transparent to-optical-cyan/5" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-optical-green/10 via-transparent to-transparent" />
-          
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="relative z-10 max-w-5xl mx-auto text-center space-y-8"
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.2, type: 'spring', stiffness: 100 }}
-              className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-optical-green/10"
-            >
-              <Camera className="w-10 h-10 text-optical-green" />
-            </motion.div>
-
-            <div className="space-y-4">
-              <h1 className="text-5xl sm:text-7xl font-bold tracking-tight">
-                Send Files Through{' '}
-                <span className="text-gradient">Light</span>
-              </h1>
-              <p className="text-xl sm:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-                A private, network-free file transfer system using nothing but a screen and a camera.
-              </p>
-            </div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-4"
-            >
-              <Link to="/send">
-                <Button size="xl" className="btn-primary min-w-[200px] gap-2">
-                  <Camera className="w-5 h-5" />
-                  Send a File
-                </Button>
-              </Link>
-              <Link to="/receive">
-                <Button size="xl" variant="secondary" className="min-w-[200px] gap-2">
-                  <Smartphone className="w-5 h-5" />
-                  Receive a File
-                </Button>
-              </Link>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.6 }}
-              className="flex items-center justify-center gap-8 text-sm text-muted-foreground"
-            >
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-optical-green" />
-                <span>No Internet</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <WifiOff className="w-4 h-4 text-optical-green" />
-                <span>No Pairing</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CloudOff className="w-4 h-4 text-optical-green" />
-                <span>No Cloud</span>
-              </div>
-            </motion.div>
-          </motion.div>
-        </section>
-
-        <section className="py-20 px-4 border-y border-optical-border">
-          <div className="max-w-5xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="text-center mb-16"
-            >
-              <h2 className="section-title mb-4">How It Works</h2>
-              <p className="section-subtitle mx-auto">Four simple steps to transfer files optically</p>
-            </motion.div>
-
-            <div className="grid md:grid-cols-4 gap-6">
-              {steps.map((step, index) => (
-                <motion.div
-                  key={step.number}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.1 }}
-                  className="card-panel p-6 relative"
-                >
-                  <div className="text-4xl font-bold text-optical-green/20 mb-4 font-mono">{step.number}</div>
-                  <h3 className="text-xl font-semibold mb-2">{step.title}</h3>
-                  <p className="text-muted-foreground">{step.description}</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="py-20 px-4">
-          <div className="max-w-5xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="text-center mb-16"
-            >
-              <h2 className="section-title mb-4">Key Features</h2>
-              <p className="section-subtitle mx-auto">Built for privacy, speed, and reliability</p>
-            </motion.div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {features.map((feature, index) => (
-                <motion.div
-                  key={feature.title}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.05 }}
-                  className="card-panel p-6 hover:border-optical-green/50 transition-all"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-optical-green/10 flex items-center justify-center mb-4">
-                    <feature.icon className="w-6 h-6 text-optical-green" />
-                  </div>
-                  <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-                  <p className="text-muted-foreground">{feature.description}</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="py-20 px-4 border-y border-optical-border">
-          <div className="max-w-5xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="text-center mb-16"
-            >
-              <h2 className="section-title mb-4">Live Demo</h2>
-              <p className="section-subtitle mx-auto">Try the QR frame generator (simulated for demo)</p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="card-panel p-8 max-w-2xl mx-auto"
-            >
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Demo Transfer ID</label>
-                  <div className="font-mono text-optical-green bg-optical-panel px-4 py-3 rounded-lg border border-optical-border">
-                    od_1xk9m2p_abc123def
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Current Frame</label>
-                  <QRDisplay
-                    data={JSON.stringify({
-                      protocolVersion: 1,
-                      transferId: 'od_1xk9m2p_abc123def',
-                      frameIndex: 142,
-                      totalFrames: 1800,
-                      payload: 'SGVsbG8gV29ybGQhIFRoaXMgaXMgYSBkZW1vIGZyYW1lLi4u',
-                      checksum: 'a1b2c3d4',
-                      frameType: 'data'
-                    })}
-                    size={256}
-                  />
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Frame</span>
-                    <span className="font-mono text-optical-green">142 / 1,800</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Progress</span>
-                    <span className="font-mono text-optical-green">7.9%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">ETA</span>
-                    <span className="font-mono text-optical-green">4m 32s</span>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <Button variant="secondary" className="flex-1">Pause</Button>
-                  <Button variant="optical" className="flex-1">Resume</Button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        </section>
-
-        <section className="py-20 px-4">
-          <div className="max-w-5xl mx-auto text-center">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-            >
-              <h2 className="section-title mb-4">Ready to Transfer?</h2>
-              <p className="section-subtitle mx-auto mb-8">Start sending files through light today</p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link to="/send">
-                  <Button size="xl" className="btn-primary min-w-[200px] gap-2">
-                    <Camera className="w-5 h-5" />
-                    Send a File
-                  </Button>
-                </Link>
-                <Link to="/receive">
-                  <Button size="xl" variant="secondary" className="min-w-[200px] gap-2">
-                    <Smartphone className="w-5 h-5" />
-                    Receive a File
-                  </Button>
-                </Link>
-              </div>
-            </motion.div>
-          </div>
-        </section>
-      </main>
-
-      <footer className="border-t border-optical-border py-8 px-4">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <div className="w-6 h-6 rounded-lg bg-optical-green/20 flex items-center justify-center">
-              <Camera className="w-4 h-4 text-optical-green" />
-            </div>
-            <span className="font-semibold text-white">OpticalDrop</span>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Files never leave your device. Transfer directly through light.
+    <div className="flex flex-col min-h-[100svh] bg-decimen-bg text-decimen-text font-mono font-[15px] leading-relaxed relative bg-[radial-gradient(circle_at_80%_-10%,rgba(88,200,255,0.07),transparent_35%)]">
+      <Header />
+      <main className="flex-1 w-[min(1120px,calc(100%-40px))] mx-auto pt-[clamp(56px,9vw,110px)] pb-12 flex flex-col items-center">
+        <section className="max-w-[820px] mb-[clamp(48px,7vw,82px)] w-full">
+          <h1 className="m-0 text-decimen-text font-mono text-[clamp(32px,5vw,56px)] leading-none tracking-[-0.05em] normal-case text-start">
+            Transfer files<br />with light.
+          </h1>
+          <p className="max-w-[660px] mt-5 text-decimen-muted text-[clamp(15px,2vw,18px)] leading-[1.65]">
+            Send a file or a block of text from one screen to another device's camera.
+            No account, pairing, cloud storage, or network path between devices.
           </p>
-          <div className="flex items-center gap-6 text-sm text-muted-foreground">
-            <a href="/about" className="hover:text-white transition-colors">About</a>
-            <a href="/privacy" className="hover:text-white transition-colors">Privacy</a>
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">GitHub</a>
-          </div>
-        </div>
-      </footer>
+        </section>
+
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+          <article className="min-h-[336px] flex flex-col justify-between gap-[30px] p-[clamp(24px,4vw,42px)] border border-decimen-line rounded-[18px] bg-gradient-to-br from-decimen-panel-strong to-decimen-panel">
+            <div>
+              <p className="m-0 mb-2 text-decimen-accent text-[11px] font-bold tracking-[0.14em] uppercase">This screen transmits</p>
+              <h2 className="max-w-[430px] m-0 mb-[14px] text-decimen-text text-[clamp(25px,3.4vw,38px)] leading-[1.08] tracking-[-0.04em] font-bold">Send a file or text</h2>
+              <p className="max-w-[480px] m-0 text-decimen-muted">Any file up to 500MB, or a pasted text snippet. Compressed when it helps, restored with its original name.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link to="/send" className="group flex items-center justify-between gap-[22px] w-full min-h-[54px] px-[22px] text-decimen-accent-ink bg-decimen-accent border border-decimen-accent rounded-[10px] text-[13px] font-bold tracking-[0.14em] uppercase no-underline transition-colors hover:bg-decimen-accent-hi hover:border-decimen-accent-hi focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-decimen-text">
+                <span>Send</span>
+                <ArrowRight className="w-5 h-5 flex-none transition-transform group-hover:translate-x-1" strokeWidth={2.4} />
+              </Link>
+            </div>
+          </article>
+
+          <article className="min-h-[336px] flex flex-col justify-between gap-[30px] p-[clamp(24px,4vw,42px)] border border-decimen-line-bright rounded-[18px] bg-gradient-to-br from-[rgba(88,200,255,0.07)] to-decimen-panel">
+            <div>
+              <p className="m-0 mb-2 text-decimen-accent text-[11px] font-bold tracking-[0.14em] uppercase">This camera receives</p>
+              <h2 className="max-w-[430px] m-0 mb-[14px] text-decimen-text text-[clamp(25px,3.4vw,38px)] leading-[1.08] tracking-[-0.04em] font-bold">Point and receive</h2>
+              <p className="max-w-[480px] m-0 text-decimen-muted">Point your camera at the sender's screen to receive the file.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link to="/receive" className="group flex items-center justify-between gap-[22px] w-full min-h-[54px] px-[22px] text-decimen-accent-ink bg-decimen-accent border border-decimen-accent rounded-[10px] text-[13px] font-bold tracking-[0.14em] uppercase no-underline transition-colors hover:bg-decimen-accent-hi hover:border-decimen-accent-hi focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-decimen-text">
+                <span>Receive</span>
+                <ArrowDown className="w-5 h-5 flex-none transition-transform group-hover:translate-y-1" strokeWidth={2.4} />
+              </Link>
+            </div>
+          </article>
+        </section>
+
+        <p className="mt-[30px] text-decimen-muted-dim text-[11px] text-center max-w-2xl">
+          A network path is not required between the devices. The bytes travel as light.
+          Files are not encrypted, so anything on the sending screen is readable by any
+          camera pointed at it.
+        </p>
+      </main>
+      <Footer />
     </div>
   );
 }
+
+export { Header, Footer };

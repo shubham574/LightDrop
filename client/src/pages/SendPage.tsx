@@ -1,23 +1,13 @@
 'use client';
 
 import * as React from 'react';
-import { motion } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
 import { cn, formatFileSize } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
-import { Label } from '@/components/ui/label';
+import { Header, Footer } from './LandingPage';
 import { QRTransmissionEngine } from '@/components/sender/QRTransmissionEngine';
 import { prepareTransfer, getTransferEstimates, PreparedTransfer } from '@/lib/protocol';
 import { useTransferStore } from '@/stores/transferStore';
 import { useToast } from '@/hooks/useToast';
-import { 
-  FileIcon, 
-  Upload, 
-  X, 
-  CheckCircle, 
-  Loader2,
-} from 'lucide-react';
 
 export function SendPage() {
   const { toast } = useToast();
@@ -30,15 +20,9 @@ export function SendPage() {
   } = useTransferStore();
   
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
-  const [isProcessing, ReactIsProcessing] = React.useState(false);
-  const [isProcessingLocal, setIsProcessingLocal] = React.useState(false);
+  const [isProcessing, setIsProcessing] = React.useState(false);
   const [prepared, setPrepared] = React.useState<PreparedTransfer | null>(null);
   const [estimates, setEstimates] = React.useState<any>(null);
-
-  const setIsProcessing = (val: boolean) => {
-      ReactIsProcessing(val);
-      setIsProcessingLocal(val);
-  }
 
   const onDrop = React.useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
@@ -99,166 +83,145 @@ export function SendPage() {
 
   if (prepared) {
     return (
-      <QRTransmissionEngine
-        encoder={prepared.encoder}
-        manifest={prepared.manifest}
-        onCancel={handleCancel}
-        onSpeedChange={handleSpeedChange}
-        initialSpeed={config.speed}
-      />
+      <div className="flex flex-col min-h-[100svh] bg-decimen-bg text-decimen-text font-mono font-[15px] leading-relaxed relative bg-[radial-gradient(circle_at_80%_-10%,rgba(88,200,255,0.07),transparent_35%)]">
+        <Header />
+        <main className="flex-1 flex flex-col items-center p-5">
+          <QRTransmissionEngine
+            encoder={prepared.encoder}
+            manifest={prepared.manifest}
+            onCancel={handleCancel}
+            onSpeedChange={handleSpeedChange}
+            initialSpeed={config.speed}
+          />
+        </main>
+        <Footer />
+      </div>
     );
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="min-h-screen flex flex-col"
-    >
-      <div className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-3xl space-y-6">
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-center"
-          >
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-optical-green/10 mb-4">
-              <Upload className="w-8 h-8 text-optical-green" />
-            </div>
-            <h1 className="text-4xl font-bold tracking-tight mb-2">Send a File</h1>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Select a file to encode into fountain-coded QR frames for optical transfer
-            </p>
-          </motion.div>
+    <div className="flex flex-col min-h-[100svh] bg-decimen-bg text-decimen-text font-mono font-[15px] leading-relaxed relative bg-[radial-gradient(circle_at_80%_-10%,rgba(88,200,255,0.07),transparent_35%)]">
+      <Header />
+      <main className="flex-1 flex flex-col items-center gap-[14px] p-5 w-full">
+        
+        <section className="text-center mb-4">
+          <p className="m-0 mb-2 text-decimen-accent text-[11px] font-bold tracking-[0.14em] uppercase">Screen → camera</p>
+          <h1 className="m-0 text-decimen-accent text-[16px] tracking-[0.12em] uppercase">Send a file</h1>
+          <p className="mt-2 text-decimen-muted text-[13px] max-w-[640px] text-center">Nothing leaves your device until you scan with a receiver.</p>
+        </section>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="card-panel"
-            {...(getRootProps() as any)}
-          >
-            <input {...getInputProps()} />
-            <div className={cn(
-              'flex flex-col items-center justify-center p-8 rounded-xl border-2 border-dashed transition-all',
-              isDragActive 
-                ? 'border-optical-green bg-optical-green/5' 
-                : 'border-optical-border hover:border-optical-green/50'
-            )}>
-              <Upload className="w-12 h-12 text-muted-foreground mb-4" />
-              <p className="text-lg font-medium mb-1">
-                {isDragActive ? 'Drop file here' : 'Drag & drop a file, or click to select'}
-              </p>
-              <p className="text-sm text-muted-foreground mb-4">
-                Maximum file size: 500 MB
-              </p>
-              <Button variant="optical" size="lg" className="w-full max-w-xs">
-                <FileIcon className="w-5 h-5 mr-2" />
-                Choose File
-              </Button>
-            </div>
-          </motion.div>
-
-          {selectedFile && !isProcessingLocal && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="card-panel p-6 space-y-4"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-optical-green/10 flex items-center justify-center">
-                    <FileIcon className="w-6 h-6 text-optical-green" />
-                  </div>
-                  <div>
-                    <p className="font-medium">{selectedFile.name}</p>
-                    <p className="text-sm text-muted-foreground">{formatFileSize(selectedFile.size)}</p>
-                  </div>
-                </div>
-                <Button variant="ghost" size="icon" onClick={() => setSelectedFile(null)}>
-                  <X className="w-5 h-5" />
-                </Button>
-              </div>
-              <Separator />
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Block Size</Label>
-                  <select
-                    value={config.blockSize}
-                    onChange={(e) => setConfig({ blockSize: parseInt(e.target.value) })}
-                    className="input-field mt-1"
-                  >
-                    <option value={64}>64 bytes (small files)</option>
-                    <option value={128}>128 bytes</option>
-                    <option value={256}>256 bytes (default)</option>
-                    <option value={512}>512 bytes</option>
-                    <option value={1024}>1 KB (large files)</option>
-                  </select>
-                </div>
-                <div>
-                  <Label>Speed</Label>
-                  <select
-                    value={config.speed}
-                    onChange={(e) => setConfig({ speed: e.target.value as any })}
-                    className="input-field mt-1"
-                  >
-                    <option value="COMPATIBILITY">Compatibility (5 FPS)</option>
-                    <option value="BALANCED">Balanced (10 FPS)</option>
-                    <option value="FAST">Fast (15 FPS)</option>
-                    <option value="EXTREME">Extreme (30 FPS - Default)</option>
-                    <option value="HYPER">Hyper (60 FPS - Blazing Fast)</option>
-                  </select>
-                </div>
-                <div>
-                  <Label>Source Blocks</Label>
-                  <p className="font-mono text-lg text-optical-green mt-1">
-                    {estimates?.totalBlocks || '—'}
-                  </p>
-                </div>
-                <div>
-                  <Label>Est. Duration</Label>
-                  <p className="font-mono text-lg text-optical-green mt-1">
-                    {estimates?.estimatedDuration || '—'}
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="optical"
-                size="xl"
-                className="w-full"
-                onClick={() => processFile(selectedFile)}
-                disabled={isProcessingLocal}
-              >
-                {isProcessingLocal ? (
-                  <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-5 h-5 mr-2" />
-                    Start Transmission
-                  </>
-                )}
-              </Button>
-            </motion.div>
-          )}
-
-          {isProcessingLocal && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="card-panel p-6 text-center"
-            >
-              <Loader2 className="w-12 h-12 text-optical-green animate-spin mx-auto mb-4" />
-              <p className="text-lg">Processing file...</p>
-              <p className="text-sm text-muted-foreground mt-2">Computing SHA-256 and preparing fountain encoder</p>
-            </motion.div>
-          )}
+        <div className="flex gap-2 p-1 border border-decimen-line rounded-full uppercase text-[11px] tracking-[0.06em] text-decimen-muted font-mono mb-4">
+          <label className="flex items-center gap-2 px-3 py-1 bg-decimen-panel border border-decimen-line-bright rounded-full text-decimen-text cursor-pointer">
+            <input type="radio" name="send-mode" value="file" defaultChecked className="hidden" />
+            <span>File</span>
+          </label>
+          <label className="flex items-center gap-2 px-3 py-1 border border-transparent rounded-full cursor-pointer hover:text-decimen-text">
+            <input type="radio" name="send-mode" value="snippet" disabled className="hidden" />
+            <span className="opacity-50">Text snippet (Coming soon)</span>
+          </label>
         </div>
-      </div>
-    </motion.div>
+
+        {!selectedFile ? (
+          <div {...getRootProps()} className={cn(
+            "relative w-[min(92vw,640px)] flex items-center gap-[14px] bg-decimen-panel border border-decimen-line-bright rounded-lg p-[14px_16px] cursor-pointer transition-colors hover:border-decimen-accent",
+            isDragActive ? "border-decimen-accent bg-decimen-panel-strong" : ""
+          )}>
+            <input {...getInputProps()} className="absolute w-[1px] h-[1px] opacity-0 pointer-events-none" />
+            <span className="flex-none text-decimen-accent-ink bg-decimen-accent border border-transparent rounded-md px-[14px] py-[8px] font-bold transition-colors">
+              Select File
+            </span>
+            <span className="min-w-0 break-all text-decimen-accent font-bold">
+              Any file · up to 500 MB
+            </span>
+          </div>
+        ) : (
+          <div className="relative w-[min(92vw,640px)] flex items-center gap-[14px] bg-[rgba(255,123,114,0.12)] border border-decimen-red rounded-lg p-[14px_16px] cursor-pointer">
+            <span 
+              onClick={() => setSelectedFile(null)}
+              className="flex-none text-decimen-red bg-transparent border border-decimen-red rounded-md px-[14px] py-[8px] font-bold hover:bg-decimen-red hover:text-decimen-accent-ink transition-colors cursor-pointer"
+            >
+              Clear File
+            </span>
+            <span className="min-w-0 break-all text-decimen-accent font-bold flex flex-col">
+              <span>{selectedFile.name}</span>
+              <span className="text-[11px] text-decimen-muted">{formatFileSize(selectedFile.size)}</span>
+            </span>
+          </div>
+        )}
+
+        {selectedFile && (
+          <details className="w-[min(92vw,640px)] bg-decimen-panel border border-decimen-line rounded-lg p-[8px_12px] open:pb-4 mt-2" open>
+            <summary className="cursor-pointer text-decimen-text-dim text-[13px] font-bold uppercase tracking-[0.08em] select-none">
+              Transfer settings
+            </summary>
+            
+            <div className="flex flex-wrap gap-x-[18px] gap-y-[10px] pt-[10px]">
+              <label className="flex flex-col gap-[3px] text-[11px] text-decimen-muted uppercase tracking-[0.08em]">
+                <span>Block Size</span>
+                <select 
+                  value={config.blockSize}
+                  onChange={(e) => setConfig({ blockSize: parseInt(e.target.value) })}
+                  className="font-mono text-[16px] text-decimen-text bg-decimen-bg border border-decimen-line rounded-md px-[8px] py-[5px]"
+                >
+                  <option value={64}>64 bytes</option>
+                  <option value={128}>128 bytes</option>
+                  <option value={256}>256 bytes (default)</option>
+                  <option value={512}>512 bytes</option>
+                  <option value={1024}>1 KB</option>
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-[3px] text-[11px] text-decimen-muted uppercase tracking-[0.08em]">
+                <span>Speed</span>
+                <select 
+                  value={config.speed}
+                  onChange={(e) => setConfig({ speed: e.target.value as any })}
+                  className="font-mono text-[16px] text-decimen-text bg-decimen-bg border border-decimen-line rounded-md px-[8px] py-[5px]"
+                >
+                  <option value="COMPATIBILITY">Compatibility (5 FPS)</option>
+                  <option value="BALANCED">Balanced (10 FPS)</option>
+                  <option value="FAST">Fast (15 FPS)</option>
+                  <option value="EXTREME">Extreme (30 FPS)</option>
+                  <option value="HYPER">Hyper (60 FPS)</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-[18px] gap-y-[10px] mt-[10px] pt-[9px] border-t border-decimen-line">
+              <div className="min-w-0">
+                <dt className="text-decimen-muted text-[10px] tracking-[0.08em] uppercase">Source Blocks</dt>
+                <dd className="m-[2px_0_0] text-decimen-text text-[13px] break-all">{estimates?.totalBlocks || '—'}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-decimen-muted text-[10px] tracking-[0.08em] uppercase">Est. Duration</dt>
+                <dd className="m-[2px_0_0] text-decimen-text text-[13px] break-all">{estimates?.estimatedDuration || '—'}</dd>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-center">
+              <button
+                className="w-full text-decimen-accent-ink bg-decimen-accent border-0 rounded-lg px-[36px] py-[14px] text-[18px] font-bold cursor-pointer transition-colors hover:bg-decimen-accent-hi disabled:opacity-50"
+                onClick={() => processFile(selectedFile)}
+                disabled={isProcessing}
+              >
+                {isProcessing ? 'Preparing...' : 'Start transmission'}
+              </button>
+            </div>
+          </details>
+        )}
+
+        {!selectedFile && (
+          <div className="text-decimen-muted text-[13px] text-center max-w-[640px] mt-4">
+            Choose a file to begin
+          </div>
+        )}
+
+        <div className="text-decimen-muted-dim text-[11px] text-center max-w-[640px] mt-8">
+          Open Receive on the other device. Turn up this screen's brightness.
+        </div>
+
+      </main>
+      <Footer />
+    </div>
   );
 }

@@ -16,8 +16,8 @@ export default defineConfig({
         name: 'OpticalDrop',
         short_name: 'OpticalDrop',
         description: 'Send files through light - offline optical file transfer',
-        theme_color: '#0a0a0f',
-        background_color: '#0a0a0f',
+        theme_color: '#070a11',
+        background_color: '#070a11',
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',
@@ -79,12 +79,6 @@ export default defineConfig({
     port: 5173,
     host: true,
     allowedHosts: true,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-      },
-    },
   },
   preview: {
     port: 5173,

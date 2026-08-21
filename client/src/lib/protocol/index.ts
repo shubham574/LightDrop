@@ -1,278 +1,145 @@
 import {
   PROTOCOL_VERSION,
-  DEFAULT_CHUNK_SIZE,
-  REDUNDANCY_RATIOS,
+  DEFAULT_BLOCK_SIZE,
   TRANSMISSION_SPEEDS,
+  FRAME_TYPE_MANIFEST,
+  FRAME_TYPE_FOUNTAIN,
+  DEFAULT_FOUNTAIN_OVERHEAD,
   TransmissionSpeed,
 } from '@optical-drop/shared/constants';
-import type { FramePayload } from '@optical-drop/shared/types';
-import type { FrameType } from '@optical-drop/shared/constants';
+import type { TransferManifest, FountainSymbol } from '@optical-drop/shared/types';
 import {
   generateTransferId,
-  calculateFrameChecksum,
-  estimateFrames,
-  estimateDuration,
+  hashTransferId,
+  serializeBinaryFrame,
+  deserializeBinaryFrame,
+  serializeManifest,
+  deserializeManifest,
   getFileSizeBucket,
+  estimateSymbolsNeeded,
+  estimateDuration,
 } from '@optical-drop/shared/protocol';
-import { TransferMetadata, ChunkData, ParityChunk, EncodedFrame } from '@optical-drop/shared/types';
+import { FountainEncoder, FountainDecoder } from '@/lib/fountain';
 
 export interface TransferConfig {
-  chunkSize: number;
-  redundancyLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  blockSize: number;
   speed: TransmissionSpeed;
 }
 
 export const DEFAULT_TRANSFER_CONFIG: TransferConfig = {
-  chunkSize: DEFAULT_CHUNK_SIZE,
-  redundancyLevel: 'LOW',
+  blockSize: DEFAULT_BLOCK_SIZE,
   speed: 'EXTREME',
 };
 
-export async function createTransfer(
+export interface PreparedTransfer {
+  manifest: TransferManifest;
+  encoder: FountainEncoder;
+  sourceData: Uint8Array;
+}
+
+export async function prepareTransfer(
   file: File,
   config: Partial<TransferConfig> = {}
-): Promise<{ metadata: TransferMetadata; chunks: ChunkData[]; parityChunks: ParityChunk[] }> {
+): Promise<PreparedTransfer> {
   const finalConfig = { ...DEFAULT_TRANSFER_CONFIG, ...config };
-  
+
   const arrayBuffer = await file.arrayBuffer();
-  const uint8Array = new Uint8Array(arrayBuffer);
-  
-  const checksum = await calculateSHA256(uint8Array);
+  let sourceData = new Uint8Array(arrayBuffer);
+
+  // Try gzip compression
+  let compressed = false;
+  let compressedSize: number | undefined;
+  try {
+    const compressedData = await compressData(sourceData);
+    if (compressedData.length < sourceData.length * 0.9) {
+      compressedSize = compressedData.length;
+      sourceData = compressedData as any;
+      compressed = true;
+    }
+  } catch {
+    // Compression not available, use raw data
+  }
+
+  const checksum = await calculateSHA256(sourceData);
   const transferId = generateTransferId();
-  
-  const chunks = chunkData(uint8Array, finalConfig.chunkSize);
-  const parityChunks = generateParityChunks(chunks, REDUNDANCY_RATIOS[finalConfig.redundancyLevel]);
-  
-  const totalFrames = chunks.length + parityChunks.length + 2;
-  
-  const metadata: TransferMetadata = {
+  const encoder = new FountainEncoder(sourceData, finalConfig.blockSize);
+
+  const manifest: TransferManifest = {
     transferId,
     fileName: file.name,
     fileSize: file.size,
     mimeType: file.type || 'application/octet-stream',
-    chunkSize: finalConfig.chunkSize,
-    totalChunks: chunks.length,
+    blockSize: finalConfig.blockSize,
+    totalBlocks: encoder.totalBlocks,
     checksum,
     protocolVersion: PROTOCOL_VERSION,
     createdAt: Date.now(),
-    redundancyLevel: finalConfig.redundancyLevel,
+    compressed,
+    compressedSize,
   };
-  
-  return { metadata, chunks, parityChunks };
+
+  return { manifest, encoder, sourceData };
 }
 
-function chunkData(data: Uint8Array, chunkSize: number): ChunkData[] {
-  const chunks: ChunkData[] = [];
-  for (let i = 0; i < data.length; i += chunkSize) {
-    const chunk = data.slice(i, i + chunkSize);
-    const checksum = calculateSimpleChecksum(chunk);
-    chunks.push({
-      index: chunks.length,
-      data: chunk,
-      checksum,
-    });
+export function createManifestFrame(manifest: TransferManifest): Uint8Array {
+  const payload = serializeManifest(manifest);
+  return serializeBinaryFrame(
+    manifest.transferId,
+    FRAME_TYPE_MANIFEST,
+    0,
+    manifest.totalBlocks,
+    manifest.blockSize,
+    payload
+  );
+}
+
+export function createFountainFrame(
+  encoder: FountainEncoder,
+  transferId: string
+): Uint8Array {
+  const symbol = encoder.nextSymbol();
+  return serializeBinaryFrame(
+    transferId,
+    FRAME_TYPE_FOUNTAIN,
+    symbol.seed,
+    encoder.totalBlocks,
+    encoder.blockSize,
+    symbol.data
+  );
+}
+
+export function decodeBinaryFrame(data: Uint8Array): {
+  type: 'manifest';
+  manifest: TransferManifest;
+} | {
+  type: 'fountain';
+  symbol: FountainSymbol;
+  totalBlocks: number;
+  blockSize: number;
+  transferIdHash: number;
+} | null {
+  const parsed = deserializeBinaryFrame(data);
+  if (!parsed) return null;
+
+  const { header, payload } = parsed;
+
+  if (header.frameType === FRAME_TYPE_MANIFEST) {
+    const manifest = deserializeManifest(payload);
+    if (!manifest) return null;
+    return { type: 'manifest', manifest };
   }
-  return chunks;
-}
 
-function generateParityChunks(chunks: ChunkData[], redundancyRatio: number): ParityChunk[] {
-  const parityCount = Math.ceil(chunks.length * redundancyRatio);
-  const parityChunks: ParityChunk[] = [];
-  
-  for (let i = 0; i < parityCount; i++) {
-    const sourceIndices: number[] = [];
-    const parityData = new Uint8Array(chunks[0]?.data.length || 0);
-    
-    for (let j = i; j < chunks.length; j += parityCount) {
-      sourceIndices.push(j);
-      for (let k = 0; k < chunks[j].data.length; k++) {
-        parityData[k] ^= chunks[j].data[k];
-      }
-    }
-    
-    parityChunks.push({
-      index: i,
-      data: parityData,
-      sourceIndices,
-    });
-  }
-  
-  return parityChunks;
-}
-
-export function encodeFrames(
-  metadata: TransferMetadata,
-  chunks: ChunkData[],
-  parityChunks: ParityChunk[]
-): EncodedFrame[] {
-  const frames: EncodedFrame[] = [];
-  const totalDataFrames = chunks.length;
-  const totalParityFrames = parityChunks.length;
-  const totalFrames = totalDataFrames + totalParityFrames + 2;
-  
-  const metadataPayload = JSON.stringify({
-    fileName: metadata.fileName,
-    fileSize: metadata.fileSize,
-    mimeType: metadata.mimeType,
-    chunkSize: metadata.chunkSize,
-    totalChunks: metadata.totalChunks,
-    checksum: metadata.checksum,
-    redundancyLevel: metadata.redundancyLevel,
-  });
-  
-  const metadataFrame: FramePayload = {
-    protocolVersion: PROTOCOL_VERSION,
-    transferId: metadata.transferId,
-    frameIndex: 0,
-    totalFrames,
-    payload: metadataPayload,
-    checksum: calculateFrameChecksum(metadataPayload),
-    frameType: 'metadata',
-  };
-  
-  frames.push({
-    data: JSON.stringify(metadataFrame),
-    frameIndex: 0,
-    totalFrames,
-    frameType: 'metadata',
-  });
-  
-  for (let i = 0; i < chunks.length; i++) {
-    const payload = arrayBufferToBase64(chunks[i].data);
-    const frame: FramePayload = {
-      protocolVersion: PROTOCOL_VERSION,
-      transferId: metadata.transferId,
-      frameIndex: i + 1,
-      totalFrames,
-      payload,
-      checksum: calculateFrameChecksum(payload),
-      frameType: 'data',
+  if (header.frameType === FRAME_TYPE_FOUNTAIN) {
+    return {
+      type: 'fountain',
+      symbol: { seed: header.seed, data: payload },
+      totalBlocks: header.totalBlocks,
+      blockSize: header.blockSize,
+      transferIdHash: header.transferIdHash,
     };
-    frames.push({
-      data: JSON.stringify(frame),
-      frameIndex: i + 1,
-      totalFrames,
-      frameType: 'data',
-    });
   }
-  
-  for (let i = 0; i < parityChunks.length; i++) {
-    const payload = arrayBufferToBase64(parityChunks[i].data);
-    const frame: FramePayload = {
-      protocolVersion: PROTOCOL_VERSION,
-      transferId: metadata.transferId,
-      frameIndex: totalDataFrames + 1 + i,
-      totalFrames,
-      payload,
-      checksum: calculateFrameChecksum(payload),
-      frameType: 'parity',
-    };
-    frames.push({
-      data: JSON.stringify(frame),
-      frameIndex: totalDataFrames + 1 + i,
-      totalFrames,
-      frameType: 'parity',
-    });
-  }
-  
-  const completePayload = JSON.stringify({ complete: true });
-  const completeFrame: FramePayload = {
-    protocolVersion: PROTOCOL_VERSION,
-    transferId: metadata.transferId,
-    frameIndex: totalFrames - 1,
-    totalFrames,
-    payload: completePayload,
-    checksum: calculateFrameChecksum(completePayload),
-    frameType: 'complete',
-  };
-  
-  frames.push({
-    data: JSON.stringify(completeFrame),
-    frameIndex: totalFrames - 1,
-    totalFrames,
-    frameType: 'complete',
-  });
-  
-  return frames;
-}
 
-export function decodeFrame(data: string): FramePayload | null {
-  try {
-    const frame = JSON.parse(data) as FramePayload;
-    if (frame.protocolVersion !== PROTOCOL_VERSION) return null;
-    if (frame.checksum !== calculateFrameChecksum(frame.payload)) return null;
-    return frame;
-  } catch {
-    return null;
-  }
-}
-
-export async function reconstructFile(
-  frames: Map<number, FramePayload>,
-  metadata: TransferMetadata,
-  parityChunks: ParityChunk[]
-): Promise<Uint8Array> {
-  const chunks: Uint8Array[] = new Array(metadata.totalChunks);
-  let receivedCount = 0;
-  
-  for (const [index, frame] of frames) {
-    if (frame.frameType === 'data' && frame.frameIndex > 0 && frame.frameIndex <= metadata.totalChunks) {
-      const chunkIndex = frame.frameIndex - 1;
-      if (!chunks[chunkIndex]) {
-        chunks[chunkIndex] = base64ToArrayBuffer(frame.payload);
-        receivedCount++;
-      }
-    }
-  }
-  
-  const missingIndices: number[] = [];
-  for (let i = 0; i < metadata.totalChunks; i++) {
-    if (!chunks[i]) missingIndices.push(i);
-  }
-  
-  if (missingIndices.length > 0) {
-    recoverMissingChunks(chunks, missingIndices, parityChunks);
-  }
-  
-  const result = new Uint8Array(metadata.fileSize);
-  let offset = 0;
-  for (let i = 0; i < metadata.totalChunks; i++) {
-    const chunk = chunks[i];
-    if (chunk) {
-      const remainingBytes = metadata.fileSize - offset;
-      const copyLength = Math.min(chunk.length, remainingBytes);
-      result.set(chunk.subarray(0, copyLength), offset);
-      offset += copyLength;
-    }
-  }
-  
-  return result;
-}
-
-function recoverMissingChunks(
-  chunks: (Uint8Array | undefined)[],
-  missingIndices: number[],
-  parityChunks: ParityChunk[]
-): void {
-  for (const parity of parityChunks) {
-    const missingInParity = parity.sourceIndices.filter(idx => missingIndices.includes(idx));
-    if (missingInParity.length === 1) {
-      const missingIdx = missingInParity[0];
-      const recovered = new Uint8Array(parity.data);
-      
-      for (const sourceIdx of parity.sourceIndices) {
-        if (sourceIdx !== missingIdx && chunks[sourceIdx]) {
-          for (let k = 0; k < recovered.length; k++) {
-            recovered[k] ^= chunks[sourceIdx]![k];
-          }
-        }
-      }
-      
-      chunks[missingIdx] = recovered;
-      const idx = missingIndices.indexOf(missingIdx);
-      if (idx !== -1) missingIndices.splice(idx, 1);
-    }
-  }
+  return null;
 }
 
 export async function verifyChecksum(data: Uint8Array, expectedChecksum: string): Promise<boolean> {
@@ -291,7 +158,7 @@ async function calculateSHA256(data: Uint8Array): Promise<string> {
     }
   }
 
-  // Pure JS fallback hash (64 hex characters) for non-secure HTTP contexts
+  // Pure JS fallback hash for non-secure HTTP contexts
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57, h3 = 0x811c9dc5, h4 = 0x62a9d9e1;
   for (let i = 0; i < data.length; i++) {
     const b = data[i];
@@ -307,40 +174,34 @@ async function calculateSHA256(data: Uint8Array): Promise<string> {
   return (p1 + p2 + p3 + p4).repeat(2);
 }
 
-function calculateSimpleChecksum(data: Uint8Array): string {
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    hash = ((hash << 5) - hash) + data[i];
-    hash = hash & hash;
+async function compressData(data: Uint8Array): Promise<Uint8Array> {
+  if (typeof CompressionStream === 'undefined') {
+    throw new Error('CompressionStream not available');
   }
-  return hash.toString(16).padStart(8, '0');
+  const stream = new Blob([data as any]).stream().pipeThrough(new CompressionStream('gzip'));
+  const blob = await new Response(stream).blob();
+  return new Uint8Array((await blob.arrayBuffer()) as ArrayBuffer);
 }
 
-function arrayBufferToBase64(buffer: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < buffer.length; i++) {
-    binary += String.fromCharCode(buffer[i]);
+export async function decompressData(data: Uint8Array): Promise<Uint8Array> {
+  if (typeof DecompressionStream === 'undefined') {
+    throw new Error('DecompressionStream not available');
   }
-  return btoa(binary);
-}
-
-function base64ToArrayBuffer(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
+  const stream = new Blob([data as any]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const blob = await new Response(stream).blob();
+  return new Uint8Array((await blob.arrayBuffer()) as ArrayBuffer);
 }
 
 export function getTransferEstimates(fileSize: number, config: TransferConfig) {
-  const totalFrames = estimateFrames(fileSize, config.chunkSize, REDUNDANCY_RATIOS[config.redundancyLevel]);
+  const totalBlocks = Math.ceil(fileSize / config.blockSize);
+  const symbolsNeeded = estimateSymbolsNeeded(totalBlocks);
   const speedConfig = TRANSMISSION_SPEEDS[config.speed] || TRANSMISSION_SPEEDS.EXTREME;
   const fps = speedConfig.fps || 30;
-  const durationMs = estimateDuration(totalFrames, fps);
-  
+  const durationMs = estimateDuration(symbolsNeeded, fps);
+
   return {
-    totalFrames,
+    totalBlocks,
+    symbolsNeeded,
     estimatedDurationMs: durationMs,
     estimatedDuration: formatDuration(durationMs),
     dataRate: `${((fileSize / 1024) / (durationMs / 1000 || 1)).toFixed(1)} KB/s`,

@@ -1,94 +1,109 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
-  createFramePayload,
-  serializeFrame,
-  deserializeFrame,
-  calculateFrameChecksum,
-  validateFrameChecksum,
+  serializeBinaryFrame,
+  deserializeBinaryFrame,
+  serializeManifest,
+  deserializeManifest,
   generateTransferId,
+  hashTransferId,
   getFileSizeBucket,
-  estimateFrames,
+  estimateSymbolsNeeded,
   estimateDuration,
 } from './protocol';
-import { PROTOCOL_VERSION, FRAME_TYPES, DEFAULT_CHUNK_SIZE, REDUNDANCY_RATIOS } from './constants';
+import { PROTOCOL_VERSION, MANIFEST_MAGIC, FRAME_TYPE_FOUNTAIN, FRAME_TYPE_MANIFEST } from './constants';
+import { TransferManifest } from './types';
 
 describe('Protocol', () => {
-  describe('Frame Payload', () => {
-    it('should create a valid frame payload', () => {
-      const frame = createFramePayload(
-        'test-transfer-id',
-        5,
-        100,
-        'test-payload',
-        'checksum123',
-        FRAME_TYPES.DATA
+  describe('Binary Frame Serialization', () => {
+    it('should serialize and deserialize a binary fountain frame correctly', () => {
+      const transferId = 'od_123_abc';
+      const frameType = FRAME_TYPE_FOUNTAIN;
+      const seed = 12345;
+      const totalBlocks = 1000;
+      const blockSize = 256;
+      const payload = new Uint8Array([1, 2, 3, 4, 5]);
+
+      const serialized = serializeBinaryFrame(
+        transferId,
+        frameType,
+        seed,
+        totalBlocks,
+        blockSize,
+        payload
       );
 
-      expect(frame.protocolVersion).toBe(PROTOCOL_VERSION);
-      expect(frame.transferId).toBe('test-transfer-id');
-      expect(frame.frameIndex).toBe(5);
-      expect(frame.totalFrames).toBe(100);
-      expect(frame.payload).toBe('test-payload');
-      expect(frame.checksum).toBe('checksum123');
-      expect(frame.frameType).toBe(FRAME_TYPES.DATA);
-    });
-
-    it('should serialize and deserialize frame correctly', () => {
-      const frame = createFramePayload(
-        'test-id',
-        1,
-        10,
-        'payload-data',
-        'abc123',
-        FRAME_TYPES.METADATA
-      );
-
-      const serialized = serializeFrame(frame);
-      const deserialized = deserializeFrame(serialized);
+      const deserialized = deserializeBinaryFrame(serialized);
 
       expect(deserialized).not.toBeNull();
-      expect(deserialized!.transferId).toBe('test-id');
-      expect(deserialized!.frameIndex).toBe(1);
-      expect(deserialized!.frameType).toBe(FRAME_TYPES.METADATA);
+      const { header, payload: deserializedPayload } = deserialized!;
+
+      expect(header.magic).toBe(MANIFEST_MAGIC);
+      expect(header.version).toBe(PROTOCOL_VERSION);
+      expect(header.transferIdHash).toBe(hashTransferId(transferId));
+      expect(header.frameType).toBe(frameType);
+      expect(header.seed).toBe(seed);
+      expect(header.totalBlocks).toBe(totalBlocks);
+      expect(header.blockSize).toBe(blockSize);
+      expect(header.payloadLength).toBe(payload.length);
+      expect(Array.from(deserializedPayload)).toEqual(Array.from(payload));
     });
 
-    it('should return null for invalid JSON', () => {
-      const result = deserializeFrame('not valid json');
-      expect(result).toBeNull();
-    });
-
-    it('should return null for missing required fields', () => {
-      const result = deserializeFrame('{"protocolVersion": 1}');
-      expect(result).toBeNull();
-    });
-
-    it('should calculate and validate checksum correctly', () => {
-      const payload = 'test payload data';
-      const checksum = calculateFrameChecksum(payload);
+    it('should return null for invalid magic bytes', () => {
+      const serialized = serializeBinaryFrame('test', FRAME_TYPE_FOUNTAIN, 1, 10, 256, new Uint8Array([1]));
+      // Corrupt magic bytes
+      serialized[0] = 0x00;
+      serialized[1] = 0x00;
       
-      const frame = createFramePayload(
-        'test-id',
-        1,
-        10,
-        payload,
-        checksum,
-        FRAME_TYPES.DATA
-      );
-
-      expect(validateFrameChecksum(frame)).toBe(true);
+      const result = deserializeBinaryFrame(serialized);
+      expect(result).toBeNull();
     });
 
-    it('should detect invalid checksum', () => {
-      const frame = createFramePayload(
-        'test-id',
-        1,
-        10,
-        'payload',
-        'wrong-checksum',
-        FRAME_TYPES.DATA
-      );
+    it('should return null for mismatched protocol version', () => {
+      const serialized = serializeBinaryFrame('test', FRAME_TYPE_FOUNTAIN, 1, 10, 256, new Uint8Array([1]));
+      // Corrupt version
+      serialized[2] = 99;
+      
+      const result = deserializeBinaryFrame(serialized);
+      expect(result).toBeNull();
+    });
 
-      expect(validateFrameChecksum(frame)).toBe(false);
+    it('should return null for truncated data', () => {
+      const serialized = serializeBinaryFrame('test', FRAME_TYPE_FOUNTAIN, 1, 10, 256, new Uint8Array([1, 2, 3, 4, 5]));
+      
+      const result = deserializeBinaryFrame(serialized.slice(0, 15)); // cut header
+      expect(result).toBeNull();
+
+      const result2 = deserializeBinaryFrame(serialized.slice(0, 22)); // cut payload
+      expect(result2).toBeNull();
+    });
+  });
+
+  describe('Manifest Serialization', () => {
+    it('should serialize and deserialize manifest correctly', () => {
+      const manifest: TransferManifest = {
+        transferId: 'test-id',
+        fileName: 'test.txt',
+        fileSize: 1024,
+        mimeType: 'text/plain',
+        blockSize: 256,
+        totalBlocks: 4,
+        checksum: 'abc123hash',
+        protocolVersion: PROTOCOL_VERSION,
+        createdAt: Date.now(),
+        compressed: false,
+      };
+
+      const serialized = serializeManifest(manifest);
+      const deserialized = deserializeManifest(serialized);
+
+      expect(deserialized).not.toBeNull();
+      expect(deserialized).toEqual(manifest);
+    });
+
+    it('should return null for invalid manifest JSON', () => {
+      const invalidPayload = new TextEncoder().encode('not valid json');
+      const result = deserializeManifest(invalidPayload);
+      expect(result).toBeNull();
     });
   });
 
@@ -107,6 +122,22 @@ describe('Protocol', () => {
     });
   });
 
+  describe('Transfer ID Hashing', () => {
+    it('should generate consistent 16-bit hashes', () => {
+      const id1 = 'od_123_abc';
+      const id2 = 'od_123_def';
+      
+      const hash1 = hashTransferId(id1);
+      const hash1b = hashTransferId(id1);
+      const hash2 = hashTransferId(id2);
+
+      expect(hash1).toBe(hash1b); // deterministic
+      expect(hash1).not.toBe(hash2); // usually distinct
+      expect(hash1).toBeGreaterThanOrEqual(0);
+      expect(hash1).toBeLessThanOrEqual(0xFFFF);
+    });
+  });
+
   describe('File Size Bucketing', () => {
     it('should categorize file sizes correctly', () => {
       expect(getFileSizeBucket(500)).toBe('tiny');
@@ -117,31 +148,19 @@ describe('Protocol', () => {
     });
   });
 
-  describe('Frame Estimation', () => {
-    it('should estimate frames correctly', () => {
-      const fileSize = 1024 * 1024; // 1 MB
-      const chunkSize = DEFAULT_CHUNK_SIZE;
-      const redundancyRatio = REDUNDANCY_RATIOS.MEDIUM;
-
-      const frames = estimateFrames(fileSize, chunkSize, redundancyRatio);
-      
-      const dataFrames = Math.ceil(fileSize / chunkSize);
-      const parityFrames = Math.ceil(dataFrames * redundancyRatio);
-      const expectedTotal = dataFrames + parityFrames + 2; // +2 for metadata and complete
-
-      expect(frames).toBe(expectedTotal);
+  describe('Estimation', () => {
+    it('should estimate symbols correctly', () => {
+      const totalBlocks = 100;
+      expect(estimateSymbolsNeeded(totalBlocks)).toBe(115); // 1.15 overhead
+      expect(estimateSymbolsNeeded(totalBlocks, 1.5)).toBe(150); // custom overhead
     });
-  });
 
-  describe('Duration Estimation', () => {
     it('should estimate duration correctly', () => {
-      const frameCount = 1000;
-      const fps = 5;
+      const symbolCount = 300;
+      const fps = 30;
       
-      const durationMs = estimateDuration(frameCount, fps);
-      const expectedMs = Math.ceil((frameCount / fps) * 1000);
-      
-      expect(durationMs).toBe(expectedMs);
+      const durationMs = estimateDuration(symbolCount, fps);
+      expect(durationMs).toBe(10000); // 10 seconds
     });
   });
 });

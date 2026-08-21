@@ -4,11 +4,11 @@ import * as React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn, formatFileSize, formatDuration, formatNumber } from '@/lib/utils';
 import { useQRScanner } from '@/hooks/useQRScanner';
-import { decodeFrame, reconstructFile, verifyChecksum } from '@/lib/protocol';
+import { decodeBinaryFrame, verifyChecksum, decompressData } from '@/lib/protocol';
+import { FountainDecoder } from '@/lib/fountain';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
 import { useTransferStore } from '@/stores/transferStore';
 import { useToast } from '@/hooks/useToast';
 import { 
@@ -26,153 +26,141 @@ import {
   Settings,
   Info
 } from 'lucide-react';
-import { FramePayload, ReceiverState } from '@optical-drop/shared/types';
+import { TransferManifest, QRCodeResult } from '@optical-drop/shared/types';
+import { hashTransferId } from '@optical-drop/shared/protocol';
 
 export function ReceivePage() {
   const { toast } = useToast();
   const { 
     receiver, 
     setReceiverState, 
-    frames, 
-    addFrame, 
-    clearFrames, 
     resetReceiver,
-    config 
   } = useTransferStore();
   
-  const [currentMetadata, setCurrentMetadata] = React.useState<any>(null);
-  const [receivedDataFrames, setReceivedDataFrames] = React.useState<Map<number, FramePayload>>(new Map());
-  const [receivedParityFrames, setReceivedParityFrames] = React.useState<Map<number, FramePayload>>(new Map());
+  const [currentManifest, setCurrentManifest] = React.useState<TransferManifest | null>(null);
+  const [decoder, setDecoder] = React.useState<FountainDecoder | null>(null);
   const [isReconstructing, setIsReconstructing] = React.useState(false);
   const [reconstructedFile, setReconstructedFile] = React.useState<Blob | null>(null);
   const [showHelp, setShowHelp] = React.useState(false);
-  const [showSettings, setShowSettings] = React.useState(false);
   const [torchEnabled, setTorchEnabled] = React.useState(false);
 
-  const handleDecodedFrame = React.useCallback(async (result: any) => {
-    const frame = decodeFrame(result.data);
-    if (!frame) return;
+  const decoderRef = React.useRef<FountainDecoder | null>(null);
+  const manifestRef = React.useRef<TransferManifest | null>(null);
+  const reconstructingRef = React.useRef(false);
 
-    if (currentMetadata && frame.transferId !== currentMetadata.transferId) {
-      return;
-    }
+  const handleDecodedFrame = React.useCallback(async (result: QRCodeResult) => {
+    // Get binary data from QR scan
+    const binaryData = result.binaryData;
+    if (!binaryData || binaryData.length === 0) return;
 
-    if (frame.frameType === 'metadata') {
-      try {
-        const meta = JSON.parse(frame.payload);
-        const fullMeta = {
-          ...meta,
-          transferId: frame.transferId,
-          protocolVersion: frame.protocolVersion,
-          totalFrames: frame.totalFrames,
-        };
-        setCurrentMetadata(fullMeta);
+    const decoded = decodeBinaryFrame(binaryData);
+    if (!decoded) return;
+
+    if (decoded.type === 'manifest') {
+      const manifest = decoded.manifest;
+      
+      // Check if this is a new transfer
+      if (manifestRef.current && manifestRef.current.transferId !== manifest.transferId) {
+        // Different transfer, reset
+        decoderRef.current = null;
+      }
+
+      if (!manifestRef.current || manifestRef.current.transferId !== manifest.transferId) {
+        manifestRef.current = manifest;
+        setCurrentManifest(manifest);
+        
+        const newDecoder = new FountainDecoder(manifest.totalBlocks, manifest.blockSize);
+        decoderRef.current = newDecoder;
+        setDecoder(newDecoder);
+        
         setReceiverState({
-          transferId: frame.transferId,
-          fileName: meta.fileName,
-          mimeType: meta.mimeType,
-          fileSize: meta.fileSize,
-          totalFrames: frame.totalFrames,
+          transferId: manifest.transferId,
+          fileName: manifest.fileName,
+          mimeType: manifest.mimeType,
+          fileSize: manifest.fileSize,
+          totalBlocks: manifest.totalBlocks,
           status: 'receiving',
           startTime: Date.now(),
+          decodedBlocks: 0,
+          uniqueSymbolsReceived: 0,
+          duplicateSymbolsSkipped: 0,
         });
-        clearFrames();
-        setReceivedDataFrames(new Map());
-        setReceivedParityFrames(new Map());
-      } catch (e) {
-        console.error('Failed to parse metadata:', e);
       }
       return;
     }
 
-    if (!currentMetadata) return;
+    if (decoded.type === 'fountain') {
+      const currentDecoder = decoderRef.current;
+      const manifest = manifestRef.current;
+      if (!currentDecoder || !manifest) return;
+      if (currentDecoder.isComplete) return;
+      if (reconstructingRef.current) return;
 
-    addFrame(frame);
+      // Verify this symbol belongs to our transfer
+      const expectedHash = hashTransferId(manifest.transferId);
+      if (decoded.transferIdHash !== expectedHash) return;
 
-    if (frame.frameType === 'data') {
-      setReceivedDataFrames(prev => {
-        const next = new Map(prev);
-        next.set(frame.frameIndex, frame);
-        return next;
-      });
-    } else if (frame.frameType === 'parity') {
-      setReceivedParityFrames(prev => {
-        const next = new Map(prev);
-        next.set(frame.frameIndex, frame);
-        return next;
-      });
-    } else if (frame.frameType === 'complete') {
-      await attemptReconstruction();
-    }
+      const contributed = currentDecoder.addSymbol(decoded.symbol.seed, decoded.symbol.data);
+      
+      if (contributed) {
+        setReceiverState({
+          decodedBlocks: currentDecoder.decodedCount,
+          uniqueSymbolsReceived: (receiver.uniqueSymbolsReceived || 0) + 1,
+          progress: currentDecoder.progress * 100,
+        });
+      } else {
+        setReceiverState({
+          duplicateSymbolsSkipped: (receiver.duplicateSymbolsSkipped || 0) + 1,
+        });
+      }
 
-    const receivedCount = receivedDataFrames.size + (frame.frameType === 'data' ? 1 : 0);
-    const missingFrames: number[] = [];
-    for (let i = 1; i <= currentMetadata.totalChunks; i++) {
-      if (!receivedDataFrames.has(i) && !(frame.frameType === 'data' && frame.frameIndex === i)) {
-        missingFrames.push(i);
+      // Update ETA
+      if (receiver.startTime && currentDecoder.progress > 0 && currentDecoder.progress < 1) {
+        const elapsed = Date.now() - receiver.startTime;
+        const rate = currentDecoder.decodedCount / (elapsed / 1000);
+        const remaining = manifest.totalBlocks - currentDecoder.decodedCount;
+        const estimatedTimeRemaining = remaining / rate * 1000;
+        setReceiverState({ estimatedTimeRemaining });
+      }
+
+      // Check if decoding is complete
+      if (currentDecoder.isComplete && !reconstructingRef.current) {
+        reconstructingRef.current = true;
+        await attemptReconstruction(currentDecoder, manifest);
       }
     }
+  }, [receiver.startTime, receiver.uniqueSymbolsReceived, receiver.duplicateSymbolsSkipped, setReceiverState]);
 
-    const progress = currentMetadata.totalChunks > 0 
-      ? (receivedCount / currentMetadata.totalChunks) * 100 
-      : 0;
-
-    let estimatedTimeRemaining = 0;
-    if (receiver.startTime && progress > 0 && progress < 100) {
-      const elapsed = Date.now() - receiver.startTime;
-      const rate = receivedCount / (elapsed / 1000);
-      const remaining = currentMetadata.totalChunks - receivedCount;
-      estimatedTimeRemaining = remaining / rate * 1000;
-    }
-
-    setReceiverState({
-      receivedFrames: receivedCount,
-      missingFrames,
-      progress: Math.min(progress, 100),
-      estimatedTimeRemaining,
-    });
-  }, [currentMetadata, receivedDataFrames, receiver.startTime, addFrame, clearFrames, setReceiverState]);
-
-  const { startScanning, stopScanning, isScanning, lastResult, error, videoRef } = useQRScanner({
+  const { startScanning, stopScanning, isScanning, error, videoRef } = useQRScanner({
     onDecode: handleDecodedFrame,
-    scanInterval: 100,
+    scanInterval: 50,
     enabled: !reconstructedFile,
   });
 
-  const attemptReconstruction = async () => {
-    if (!currentMetadata) return;
-    
+  const attemptReconstruction = async (dec: FountainDecoder, manifest: TransferManifest) => {
     setIsReconstructing(true);
     setReceiverState({ status: 'reconstructing' });
 
     try {
-      const allFrames = new Map([...receivedDataFrames, ...receivedParityFrames]);
-      const parityChunks: any[] = [];
+      let fileData: Uint8Array;
       
-      for (const [_, frame] of receivedParityFrames) {
-        const payload = atob(frame.payload);
-        const bytes = new Uint8Array(payload.length);
-        for (let i = 0; i < payload.length; i++) {
-          bytes[i] = payload.charCodeAt(i);
-        }
-        parityChunks.push({
-          index: frame.frameIndex,
-          data: bytes,
-          sourceIndices: Array.from({ length: Math.ceil(currentMetadata.totalChunks / 5) }, (_, i) => i * 5 + (frame.frameIndex % 5)),
-        });
+      if (manifest.compressed) {
+        const compressedData = dec.getDecodedData(manifest.compressedSize || manifest.fileSize);
+        fileData = await decompressData(compressedData);
+      } else {
+        fileData = dec.getDecodedData(manifest.fileSize);
       }
-
-      const data = await reconstructFile(allFrames, currentMetadata, parityChunks);
-      const valid = await verifyChecksum(data, currentMetadata.checksum);
+      
+      const valid = await verifyChecksum(fileData, manifest.checksum);
 
       if (valid) {
-        const blob = new Blob([data.buffer as ArrayBuffer], { type: currentMetadata.mimeType });
+        const blob = new Blob([fileData.buffer as ArrayBuffer], { type: manifest.mimeType });
         setReconstructedFile(blob);
         setReceiverState({ status: 'complete', progress: 100 });
         stopScanning();
-        toast({ title: 'Transfer Complete', description: `${currentMetadata.fileName} received successfully`, variant: 'success' });
+        toast({ title: 'Transfer Complete', description: `${manifest.fileName} received successfully`, variant: 'success' });
       } else {
-        setReceiverState({ status: 'error', errorMessage: 'Checksum verification failed. Some frames may be corrupted.' });
+        setReceiverState({ status: 'error', errorMessage: 'Checksum verification failed. Some data may be corrupted.' });
         toast({ title: 'Verification Failed', description: 'File integrity check failed. Please try again.', variant: 'destructive' });
       }
     } catch (err) {
@@ -181,15 +169,16 @@ export function ReceivePage() {
       toast({ title: 'Error', description: 'Failed to reconstruct file', variant: 'destructive' });
     } finally {
       setIsReconstructing(false);
+      reconstructingRef.current = false;
     }
   };
 
   const handleDownload = () => {
-    if (reconstructedFile && currentMetadata) {
+    if (reconstructedFile && currentManifest) {
       const url = URL.createObjectURL(reconstructedFile);
       const a = document.createElement('a');
       a.href = url;
-      a.download = currentMetadata.fileName;
+      a.download = currentManifest.fileName;
       a.click();
       URL.revokeObjectURL(url);
     }
@@ -197,11 +186,12 @@ export function ReceivePage() {
 
   const handleReset = () => {
     resetReceiver();
-    clearFrames();
-    setCurrentMetadata(null);
-    setReceivedDataFrames(new Map());
-    setReceivedParityFrames(new Map());
+    setCurrentManifest(null);
+    manifestRef.current = null;
+    decoderRef.current = null;
+    setDecoder(null);
     setReconstructedFile(null);
+    reconstructingRef.current = false;
     startScanning();
   };
 
@@ -218,7 +208,7 @@ export function ReceivePage() {
     }
   };
 
-  if (reconstructedFile && currentMetadata) {
+  if (reconstructedFile && currentManifest) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -237,8 +227,8 @@ export function ReceivePage() {
 
           <div>
             <h1 className="text-3xl font-bold mb-2">Transfer Complete</h1>
-            <p className="text-muted-foreground">{currentMetadata.fileName}</p>
-            <p className="text-sm text-muted-foreground mt-1">{formatFileSize(currentMetadata.fileSize)}</p>
+            <p className="text-muted-foreground">{currentManifest.fileName}</p>
+            <p className="text-sm text-muted-foreground mt-1">{formatFileSize(currentManifest.fileSize)}</p>
           </div>
 
           <div className="glass-strong rounded-xl p-4 flex items-center justify-center gap-4 text-sm">
@@ -334,7 +324,7 @@ export function ReceivePage() {
           <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between p-4 pointer-events-auto">
             <div className="glass-strong rounded-xl px-4 py-2 text-center">
               <p className="font-medium">Point camera at sender's screen</p>
-              <p className="text-xs text-muted-foreground">Fill the frame with the QR code</p>
+              <p className="text-xs text-muted-foreground">Fountain codes — order doesn't matter</p>
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -351,20 +341,20 @@ export function ReceivePage() {
         </div>
 
         <div className="flex-1 p-4 w-full max-w-2xl mx-auto space-y-6">
-          {currentMetadata && receiver.status === 'receiving' && (
+          {currentManifest && receiver.status === 'receiving' && (
             <Card className="glass-strong">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-xl">Receiving</CardTitle>
                   <span className="text-sm font-mono text-optical-green">
-                    {formatNumber(receiver.receivedFrames)} / {formatNumber(currentMetadata.totalChunks)}
+                    {formatNumber(receiver.decodedBlocks)} / {formatNumber(currentManifest.totalBlocks)} blocks
                   </span>
                 </div>
               </CardHeader>
               <CardContent className="pt-0 space-y-4">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">{currentMetadata.fileName}</span>
-                  <span className="font-mono text-optical-green">{formatFileSize(currentMetadata.fileSize)}</span>
+                  <span className="text-muted-foreground">{currentManifest.fileName}</span>
+                  <span className="font-mono text-optical-green">{formatFileSize(currentManifest.fileSize)}</span>
                 </div>
                 <Progress value={receiver.progress} max={100} className="h-3" />
                 <div className="flex items-center justify-between text-sm">
@@ -373,16 +363,15 @@ export function ReceivePage() {
                     ETA: {receiver.estimatedTimeRemaining ? formatDuration(receiver.estimatedTimeRemaining) : '—'}
                   </span>
                 </div>
-                {receiver.missingFrames.length > 0 && (
-                  <div className="text-sm text-amber-400">
-                    Missing frames: {receiver.missingFrames.length} (attempting recovery...)
-                  </div>
-                )}
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Symbols: {formatNumber(receiver.uniqueSymbolsReceived)} received</span>
+                  <span>Duplicates skipped: {formatNumber(receiver.duplicateSymbolsSkipped)}</span>
+                </div>
               </CardContent>
             </Card>
           )}
 
-          {!currentMetadata && (
+          {!currentManifest && (
             <Card className="glass-strong">
               <CardContent className="pt-6 pb-6 text-center">
                 <Camera className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
@@ -397,7 +386,7 @@ export function ReceivePage() {
                   </div>
                   <div className="flex flex-col items-center gap-1">
                     <Shield className="w-5 h-5" />
-                    <span>Encrypted</span>
+                    <span>Verified</span>
                   </div>
                   <div className="flex flex-col items-center gap-1">
                     <Camera className="w-5 h-5" />
@@ -413,7 +402,7 @@ export function ReceivePage() {
               <CardContent className="pt-6 pb-6 text-center">
                 <Loader2 className="w-12 h-12 text-optical-green animate-spin mx-auto mb-4" />
                 <h3 className="text-lg font-semibold mb-2">Reconstructing File</h3>
-                <p className="text-muted-foreground">Verifying integrity and assembling chunks...</p>
+                <p className="text-muted-foreground">Verifying integrity via SHA-256...</p>
               </CardContent>
             </Card>
           )}
@@ -509,8 +498,8 @@ export function ReceivePage() {
                     <Settings className="w-5 h-5 text-optical-green" />
                   </div>
                   <div>
-                    <p className="font-medium">Adjust Speed</p>
-                    <p className="text-muted-foreground">If frames are missed, ask sender to reduce transmission speed</p>
+                    <p className="font-medium">Fountain Codes</p>
+                    <p className="text-muted-foreground">Missed frames are automatically handled — no need to restart. Just keep scanning.</p>
                   </div>
                 </div>
               </div>

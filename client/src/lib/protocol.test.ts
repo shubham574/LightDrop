@@ -1,195 +1,104 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
-  createTransfer,
-  encodeFrames,
-  decodeFrame,
-  reconstructFile,
+  prepareTransfer,
+  createManifestFrame,
+  createFountainFrame,
+  decodeBinaryFrame,
   verifyChecksum,
   getTransferEstimates,
+  DEFAULT_TRANSFER_CONFIG,
 } from './protocol';
-import { PROTOCOL_VERSION, DEFAULT_CHUNK_SIZE, REDUNDANCY_RATIOS } from '@optical-drop/shared/constants';
+import { PROTOCOL_VERSION } from '@optical-drop/shared/constants';
 
 describe('Client Protocol', () => {
   const testFileContent = 'Hello, OpticalDrop! This is a test file for transfer. '.repeat(30);
   const testFile = new File([testFileContent], 'test.txt', { type: 'text/plain' });
 
-  describe('createTransfer', () => {
-    it('should create transfer metadata and chunks', async () => {
-      const { metadata, chunks, parityChunks } = await createTransfer(testFile);
+  describe('prepareTransfer', () => {
+    it('should create transfer manifest and fountain encoder', async () => {
+      const { manifest, encoder, sourceData } = await prepareTransfer(testFile, { blockSize: 64 });
 
-      expect(metadata.transferId).toMatch(/^od_/);
-      expect(metadata.fileName).toBe('test.txt');
-      expect(metadata.fileSize).toBe(testFile.size);
-      expect(metadata.mimeType).toBe('text/plain');
-      expect(metadata.chunkSize).toBe(DEFAULT_CHUNK_SIZE);
-      expect(metadata.totalChunks).toBeGreaterThan(0);
-      expect(metadata.checksum).toMatch(/^[a-f0-9]{64}$/);
-      expect(metadata.protocolVersion).toBe(PROTOCOL_VERSION);
-      expect(metadata.redundancyLevel).toBe('LOW');
+      expect(manifest.transferId).toMatch(/^od_/);
+      expect(manifest.fileName).toBe('test.txt');
+      expect(manifest.fileSize).toBe(testFile.size);
+      expect(manifest.mimeType).toBe('text/plain');
+      expect(manifest.blockSize).toBe(64);
+      expect(manifest.totalBlocks).toBeGreaterThan(0);
+      expect(manifest.checksum).toMatch(/^[a-f0-9]{64}$/);
+      expect(manifest.protocolVersion).toBe(PROTOCOL_VERSION);
+      expect(manifest.compressed).toBeDefined();
 
-      expect(chunks.length).toBe(metadata.totalChunks);
-      expect(parityChunks.length).toBeGreaterThan(0);
+      expect(encoder).toBeDefined();
+      expect(encoder.totalBlocks).toBe(manifest.totalBlocks);
+      expect(encoder.blockSize).toBe(manifest.blockSize);
+      expect(sourceData.length).toBeGreaterThan(0);
     });
 
-    it('should respect custom chunk size', async () => {
-      const { metadata, chunks } = await createTransfer(testFile, { chunkSize: 512 });
+    it('should respect custom block size', async () => {
+      const { manifest } = await prepareTransfer(testFile, { blockSize: 128 });
+      expect(manifest.blockSize).toBe(128);
+    });
+  });
+
+  describe('Frame encoding and decoding', () => {
+    it('should encode and decode a manifest frame', async () => {
+      const { manifest } = await prepareTransfer(testFile);
       
-      expect(metadata.chunkSize).toBe(512);
-      expect(chunks.length).toBeGreaterThan(1);
-    });
+      const frameData = createManifestFrame(manifest);
+      expect(frameData).toBeInstanceOf(Uint8Array);
+      expect(frameData.length).toBeGreaterThan(20);
 
-    it('should respect custom redundancy level', async () => {
-      const multiChunkFile = new File(['A'.repeat(5000)], 'multi.txt', { type: 'text/plain' });
-      const { parityChunks: parityLow } = await createTransfer(multiChunkFile, { chunkSize: 512, redundancyLevel: 'LOW' });
-      const { parityChunks: parityHigh } = await createTransfer(multiChunkFile, { chunkSize: 512, redundancyLevel: 'HIGH' });
-
-      expect(parityHigh.length).toBeGreaterThan(parityLow.length);
-    });
-  });
-
-  describe('encodeFrames', () => {
-    it('should encode frames with correct structure', async () => {
-      const { metadata, chunks, parityChunks } = await createTransfer(testFile);
-      const frames = encodeFrames(metadata, chunks, parityChunks);
-
-      expect(frames.length).toBe(chunks.length + parityChunks.length + 2); // +2 for metadata and complete
-
-      // Check metadata frame
-      const metadataFrame = frames[0];
-      expect(metadataFrame.frameType).toBe('metadata');
-      expect(metadataFrame.frameIndex).toBe(0);
-      const metaPayload = JSON.parse(metadataFrame.data).payload;
-      const metaData = JSON.parse(metaPayload);
-      expect(metaData.fileName).toBe('test.txt');
-      expect(metaData.checksum).toBe(metadata.checksum);
-
-      // Check data frames
-      for (let i = 1; i <= chunks.length; i++) {
-        const frame = frames[i];
-        expect(frame.frameType).toBe('data');
-        expect(frame.frameIndex).toBe(i);
-      }
-
-      // Check parity frames
-      for (let i = 0; i < parityChunks.length; i++) {
-        const frame = frames[chunks.length + 1 + i];
-        expect(frame.frameType).toBe('parity');
-        expect(frame.frameIndex).toBe(chunks.length + 1 + i);
-      }
-
-      // Check complete frame
-      const completeFrame = frames[frames.length - 1];
-      expect(completeFrame.frameType).toBe('complete');
-      expect(completeFrame.frameIndex).toBe(frames.length - 1);
-    });
-  });
-
-  describe('decodeFrame', () => {
-    it('should decode valid frames', async () => {
-      const { metadata, chunks, parityChunks } = await createTransfer(testFile);
-      const frames = encodeFrames(metadata, chunks, parityChunks);
-
-      for (const frame of frames) {
-        const decoded = decodeFrame(frame.data);
-        expect(decoded).not.toBeNull();
-        expect(decoded!.transferId).toBe(metadata.transferId);
-        expect(decoded!.protocolVersion).toBe(PROTOCOL_VERSION);
+      const decoded = decodeBinaryFrame(frameData);
+      expect(decoded).not.toBeNull();
+      expect(decoded!.type).toBe('manifest');
+      
+      if (decoded?.type === 'manifest') {
+        expect(decoded.manifest.transferId).toBe(manifest.transferId);
+        expect(decoded.manifest.fileName).toBe(manifest.fileName);
+        expect(decoded.manifest.checksum).toBe(manifest.checksum);
       }
     });
 
-    it('should reject frames with wrong protocol version', () => {
-      const invalidFrame = JSON.stringify({
-        protocolVersion: 999,
-        transferId: 'test',
-        frameIndex: 1,
-        totalFrames: 10,
-        payload: 'test',
-        checksum: 'abc',
-        frameType: 'data',
-      });
+    it('should encode and decode a fountain frame', async () => {
+      const { manifest, encoder } = await prepareTransfer(testFile);
+      
+      const frameData = createFountainFrame(encoder, manifest.transferId);
+      expect(frameData).toBeInstanceOf(Uint8Array);
+      expect(frameData.length).toBe(20 + manifest.blockSize);
 
-      expect(decodeFrame(invalidFrame)).toBeNull();
-    });
-
-    it('should reject frames with invalid checksum', () => {
-      const invalidFrame = JSON.stringify({
-        protocolVersion: PROTOCOL_VERSION,
-        transferId: 'test',
-        frameIndex: 1,
-        totalFrames: 10,
-        payload: 'test',
-        checksum: 'invalid-checksum',
-        frameType: 'data',
-      });
-
-      expect(decodeFrame(invalidFrame)).toBeNull();
-    });
-
-    it('should reject malformed JSON', () => {
-      expect(decodeFrame('not json')).toBeNull();
-    });
-  });
-
-  describe('reconstructFile', () => {
-    it('should reconstruct file from all frames', async () => {
-      const { metadata, chunks, parityChunks } = await createTransfer(testFile);
-      const frames = encodeFrames(metadata, chunks, parityChunks);
-
-      const frameMap = new Map<number, any>();
-      for (const frame of frames) {
-        const decoded = decodeFrame(frame.data);
-        if (decoded) frameMap.set(decoded.frameIndex, decoded);
+      const decoded = decodeBinaryFrame(frameData);
+      expect(decoded).not.toBeNull();
+      expect(decoded!.type).toBe('fountain');
+      
+      if (decoded?.type === 'fountain') {
+        expect(decoded.symbol.seed).toBe(1); // First seed is 1
+        expect(decoded.symbol.data.length).toBe(manifest.blockSize);
+        expect(decoded.totalBlocks).toBe(manifest.totalBlocks);
+        expect(decoded.blockSize).toBe(manifest.blockSize);
       }
-
-      const reconstructed = await reconstructFile(frameMap, metadata, parityChunks);
-      const originalBytes = new TextEncoder().encode(testFileContent);
-
-      expect(reconstructed.length).toBe(originalBytes.length);
-      expect(new TextDecoder().decode(reconstructed)).toBe(testFileContent);
     });
 
-    it('should handle missing frames with parity recovery', async () => {
-      const { metadata, chunks, parityChunks } = await createTransfer(testFile);
-      const frames = encodeFrames(metadata, chunks, parityChunks);
-
-      const frameMap = new Map<number, any>();
-      // Skip one data frame to test parity recovery
-      for (let i = 0; i < frames.length; i++) {
-        if (i === 2) continue; // Skip frame 2 (first data frame after metadata)
-        const decoded = decodeFrame(frames[i].data);
-        if (decoded) frameMap.set(decoded.frameIndex, decoded);
-      }
-
-      const reconstructed = await reconstructFile(frameMap, metadata, parityChunks);
-      const originalBytes = new TextEncoder().encode(testFileContent);
-
-      expect(reconstructed.length).toBe(originalBytes.length);
-      expect(new TextDecoder().decode(reconstructed)).toBe(testFileContent);
+    it('should reject corrupted frames', () => {
+      const corruptedData = new Uint8Array([0, 1, 2, 3, 4, 5]);
+      expect(decodeBinaryFrame(corruptedData)).toBeNull();
     });
   });
 
   describe('verifyChecksum', () => {
     it('should verify correct checksum', async () => {
-      const { metadata, chunks, parityChunks } = await createTransfer(testFile);
-      const frames = encodeFrames(metadata, chunks, parityChunks);
-
-      const frameMap = new Map<number, any>();
-      for (const frame of frames) {
-        const decoded = decodeFrame(frame.data);
-        if (decoded) frameMap.set(decoded.frameIndex, decoded);
-      }
-
-      const reconstructed = await reconstructFile(frameMap, metadata, parityChunks);
-      const isValid = await verifyChecksum(reconstructed, metadata.checksum);
-
+      const { manifest, sourceData } = await prepareTransfer(testFile);
+      const isValid = await verifyChecksum(sourceData, manifest.checksum);
       expect(isValid).toBe(true);
     });
 
     it('should reject corrupted data', async () => {
-      const data = new Uint8Array([1, 2, 3, 4, 5]);
-      const wrongChecksum = 'wrong-checksum';
+      const { manifest, sourceData } = await prepareTransfer(testFile);
       
-      const isValid = await verifyChecksum(data, wrongChecksum);
+      // Corrupt the data
+      const corrupted = new Uint8Array(sourceData);
+      corrupted[0] = corrupted[0] ^ 0xFF;
+      
+      const isValid = await verifyChecksum(corrupted, manifest.checksum);
       expect(isValid).toBe(false);
     });
   });
@@ -197,13 +106,10 @@ describe('Client Protocol', () => {
   describe('getTransferEstimates', () => {
     it('should provide accurate estimates', () => {
       const fileSize = 1024 * 1024; // 1 MB
-      const estimates = getTransferEstimates(fileSize, {
-        chunkSize: DEFAULT_CHUNK_SIZE,
-        redundancyLevel: 'MEDIUM',
-        speed: 'BALANCED',
-      });
+      const estimates = getTransferEstimates(fileSize, DEFAULT_TRANSFER_CONFIG);
 
-      expect(estimates.totalFrames).toBeGreaterThan(0);
+      expect(estimates.totalBlocks).toBeGreaterThan(0);
+      expect(estimates.symbolsNeeded).toBeGreaterThan(estimates.totalBlocks);
       expect(estimates.estimatedDurationMs).toBeGreaterThan(0);
       expect(estimates.estimatedDuration).toMatch(/\d+(\.\d+)?(ms|s|m)/);
       expect(estimates.dataRate).toMatch(/\d+(\.\d+)? KB\/s/);

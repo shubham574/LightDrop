@@ -1,17 +1,13 @@
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
-export const DEFAULT_CHUNK_SIZE = 1024;
-export const MIN_CHUNK_SIZE = 256;
-export const MAX_CHUNK_SIZE = 2048;
+export const DEFAULT_BLOCK_SIZE = 256;
+export const MIN_BLOCK_SIZE = 64;
+export const MAX_BLOCK_SIZE = 1024;
 
-export const FRAME_TYPES = {
-  METADATA: 'metadata' as const,
-  DATA: 'data' as const,
-  PARITY: 'parity' as const,
-  COMPLETE: 'complete' as const,
-} as const;
-
-export type FrameType = typeof FRAME_TYPES[keyof typeof FRAME_TYPES];
+export const FOUNTAIN_FRAME_HEADER_SIZE = 20;
+export const MANIFEST_MAGIC = 0x4F44; // 'OD' in hex
+export const FRAME_TYPE_MANIFEST = 0;
+export const FRAME_TYPE_FOUNTAIN = 1;
 
 export const TRANSMISSION_SPEEDS = {
   COMPATIBILITY: { fps: 5, frameDelay: 200, name: 'Compatibility (5 FPS)' },
@@ -24,16 +20,6 @@ export const TRANSMISSION_SPEEDS = {
 export type TransmissionSpeed = keyof typeof TRANSMISSION_SPEEDS;
 
 export const DEFAULT_SPEED: TransmissionSpeed = 'EXTREME';
-
-export const REDUNDANCY_RATIOS = {
-  LOW: 0.1,
-  MEDIUM: 0.2,
-  HIGH: 0.3,
-} as const;
-
-export type RedundancyLevel = keyof typeof REDUNDANCY_RATIOS;
-
-export const DEFAULT_REDUNDANCY: RedundancyLevel = 'LOW';
 
 export const MAX_FILE_SIZE = 500 * 1024 * 1024;
 export const MAX_FRAME_PAYLOAD_SIZE = 2953;
@@ -84,3 +70,6 @@ export const ANALYTICS_EVENTS = {
   TRANSFER_FAILED: 'transfer_failed',
   TRANSFER_CANCELLED: 'transfer_cancelled',
 } as const;
+
+export const MANIFEST_INTERLEAVE_INTERVAL = 50;
+export const DEFAULT_FOUNTAIN_OVERHEAD = 1.15;

@@ -10,6 +10,7 @@ interface DecodeResult {
   type: 'result';
   id: number;
   data: string | null;
+  binaryData: Uint8Array | null;
   location?: {
     topLeftCorner: { x: number; y: number };
     topRightCorner: { x: number; y: number };
@@ -19,10 +20,6 @@ interface DecodeResult {
 }
 
 type WorkerMessage = DecodeMessage;
-type WorkerResponse = DecodeResult;
-
-const pendingCallbacks = new Map<number, (result: WorkerResponse) => void>();
-let messageId = 0;
 
 self.onmessage = (event: MessageEvent<WorkerMessage>) => {
   const { type, imageData, id } = event.data;
@@ -33,10 +30,11 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
         inversionAttempts: 'attemptBoth',
       });
       
-      const result: WorkerResponse = {
+      const result: DecodeResult = {
         type: 'result',
         id,
         data: code?.data || null,
+        binaryData: code?.binaryData ? new Uint8Array(code.binaryData) : null,
         location: code?.location,
       };
       
@@ -46,7 +44,8 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
         type: 'result',
         id,
         data: null,
-      } as WorkerResponse);
+        binaryData: null,
+      } as DecodeResult);
     }
   }
 };

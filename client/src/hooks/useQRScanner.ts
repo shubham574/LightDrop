@@ -18,7 +18,7 @@ interface UseQRScannerReturn {
 }
 
 export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerReturn {
-  const { onDecode, scanInterval = 100, enabled = true } = options;
+  const { onDecode, scanInterval = 50, enabled = true } = options;
   
   const [isScanning, setIsScanning] = useState(false);
   const [lastResult, setLastResult] = useState<QRCodeResult | null>(null);
@@ -30,21 +30,31 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
   const workerRef = useRef<Worker | null>(null);
   const isScanningRef = useRef(false);
   const animationRef = useRef<number>();
-  const scanIntervalRef = useRef<ReturnType<typeof setInterval>>();
+  const scanIntervalRef = useRef<ReturnType<typeof setTimeout>>();
   const pendingIdRef = useRef(0);
+  const onDecodeRef = useRef(onDecode);
   
   const isStartingRef = useRef(false);
+
+  // Keep onDecode ref updated without re-creating the worker
+  useEffect(() => {
+    onDecodeRef.current = onDecode;
+  }, [onDecode]);
   
   useEffect(() => {
     if (typeof Worker !== 'undefined') {
       workerRef.current = new Worker(new URL('../workers/qrDecoder.worker.ts', import.meta.url), { type: 'module' });
       
       workerRef.current.onmessage = (event) => {
-        const { id, data, location } = event.data;
-        if (data) {
-          const result: QRCodeResult = { data, location };
+        const { id, data, binaryData, location } = event.data;
+        if (data || binaryData) {
+          const result: QRCodeResult = {
+            data: data || '',
+            binaryData: binaryData || undefined,
+            location,
+          };
           setLastResult(result);
-          onDecode?.(result);
+          onDecodeRef.current?.(result);
         }
       };
       
@@ -57,7 +67,7 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
     return () => {
       workerRef.current?.terminate();
     };
-  }, [onDecode]);
+  }, []);
   
   const processFrame = useCallback(() => {
     const video = videoRef.current;

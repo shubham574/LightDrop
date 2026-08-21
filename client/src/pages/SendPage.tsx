@@ -5,12 +5,10 @@ import { motion } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
 import { cn, formatFileSize } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { QRTransmissionEngine } from '@/components/sender/QRTransmissionEngine';
-import { createTransfer, encodeFrames, getTransferEstimates } from '@/lib/protocol';
+import { prepareTransfer, getTransferEstimates, PreparedTransfer } from '@/lib/protocol';
 import { useTransferStore } from '@/stores/transferStore';
 import { useToast } from '@/hooks/useToast';
 import { 
@@ -18,29 +16,29 @@ import {
   Upload, 
   X, 
   CheckCircle, 
-  AlertCircle,
   Loader2,
-  Settings,
-  Trash2
 } from 'lucide-react';
 
 export function SendPage() {
   const { toast } = useToast();
   const { 
-    sender, 
     setSenderState, 
-    setCurrentTransfer, 
+    setCurrentManifest, 
     resetSender,
     config,
     setConfig 
   } = useTransferStore();
   
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
-  const [isProcessing, setIsProcessing] = React.useState(false);
-  const [frames, setFrames] = React.useState<any[]>([]);
-  const [metadata, setMetadata] = React.useState<any>(null);
+  const [isProcessing, ReactIsProcessing] = React.useState(false);
+  const [isProcessingLocal, setIsProcessingLocal] = React.useState(false);
+  const [prepared, setPrepared] = React.useState<PreparedTransfer | null>(null);
   const [estimates, setEstimates] = React.useState<any>(null);
-  const [showSettings, setShowSettings] = React.useState(false);
+
+  const setIsProcessing = (val: boolean) => {
+      ReactIsProcessing(val);
+      setIsProcessingLocal(val);
+  }
 
   const onDrop = React.useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
@@ -67,26 +65,19 @@ export function SendPage() {
     setSenderState({ status: 'preparing' });
     
     try {
-      const { metadata: meta, chunks, parityChunks } = await createTransfer(file, {
-        chunkSize: config.chunkSize,
-        redundancyLevel: config.redundancyLevel,
+      const transfer = await prepareTransfer(file, {
+        blockSize: config.blockSize,
         speed: config.speed,
       });
       
-      const encodedFrames = encodeFrames(meta, chunks, parityChunks);
-      const est = getTransferEstimates(file.size, config);
-      
-      setMetadata(meta);
-      setFrames(encodedFrames);
-      setEstimates(est);
-      setCurrentTransfer(meta);
+      setPrepared(transfer);
+      setCurrentManifest(transfer.manifest);
       setSenderState({ 
         status: 'transmitting',
         fileName: file.name,
         fileSize: file.size,
         mimeType: file.type,
-        totalFrames: encodedFrames.length,
-        estimatedTimeRemaining: est.estimatedDurationMs,
+        totalBlocks: transfer.manifest.totalBlocks,
       });
     } catch (error) {
       console.error('File processing error:', error);
@@ -100,28 +91,18 @@ export function SendPage() {
   const handleCancel = () => {
     resetSender();
     setSelectedFile(null);
-    setFrames([]);
-    setMetadata(null);
+    setPrepared(null);
     setEstimates(null);
   };
 
-  const handleComplete = () => {
-    toast({ title: 'Transfer Complete', description: `${metadata?.fileName} sent successfully`, variant: 'success' });
-  };
-
-  const handlePause = () => setSenderState({ status: 'paused' });
-  const handleResume = () => setSenderState({ status: 'transmitting' });
   const handleSpeedChange = (speed: any) => setConfig({ speed });
 
-  if (frames.length > 0 && metadata) {
+  if (prepared) {
     return (
       <QRTransmissionEngine
-        frames={frames}
-        metadata={metadata}
-        onComplete={handleComplete}
+        encoder={prepared.encoder}
+        manifest={prepared.manifest}
         onCancel={handleCancel}
-        onPause={handlePause}
-        onResume={handleResume}
         onSpeedChange={handleSpeedChange}
         initialSpeed={config.speed}
       />
@@ -147,7 +128,7 @@ export function SendPage() {
             </div>
             <h1 className="text-4xl font-bold tracking-tight mb-2">Send a File</h1>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Select a file to encode into QR frames for optical transfer
+              Select a file to encode into fountain-coded QR frames for optical transfer
             </p>
           </motion.div>
 
@@ -179,7 +160,7 @@ export function SendPage() {
             </div>
           </motion.div>
 
-          {selectedFile && !isProcessing && (
+          {selectedFile && !isProcessingLocal && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -203,27 +184,17 @@ export function SendPage() {
               <Separator />
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Chunk Size</Label>
+                  <Label>Block Size</Label>
                   <select
-                    value={config.chunkSize}
-                    onChange={(e) => setConfig({ chunkSize: parseInt(e.target.value) })}
+                    value={config.blockSize}
+                    onChange={(e) => setConfig({ blockSize: parseInt(e.target.value) })}
                     className="input-field mt-1"
                   >
+                    <option value={64}>64 bytes (small files)</option>
+                    <option value={128}>128 bytes</option>
+                    <option value={256}>256 bytes (default)</option>
                     <option value={512}>512 bytes</option>
-                    <option value={1024}>1 KB (default)</option>
-                    <option value={2048}>2 KB</option>
-                  </select>
-                </div>
-                <div>
-                  <Label>Redundancy</Label>
-                  <select
-                    value={config.redundancyLevel}
-                    onChange={(e) => setConfig({ redundancyLevel: e.target.value as any })}
-                    className="input-field mt-1"
-                  >
-                    <option value="LOW">Low (10%)</option>
-                    <option value="MEDIUM">Medium (20%)</option>
-                    <option value="HIGH">High (30%)</option>
+                    <option value={1024}>1 KB (large files)</option>
                   </select>
                 </div>
                 <div>
@@ -241,9 +212,15 @@ export function SendPage() {
                   </select>
                 </div>
                 <div>
-                  <Label>Estimated Frames</Label>
+                  <Label>Source Blocks</Label>
                   <p className="font-mono text-lg text-optical-green mt-1">
-                    {estimates?.totalFrames || '—'}
+                    {estimates?.totalBlocks || '—'}
+                  </p>
+                </div>
+                <div>
+                  <Label>Est. Duration</Label>
+                  <p className="font-mono text-lg text-optical-green mt-1">
+                    {estimates?.estimatedDuration || '—'}
                   </p>
                 </div>
               </div>
@@ -252,9 +229,9 @@ export function SendPage() {
                 size="xl"
                 className="w-full"
                 onClick={() => processFile(selectedFile)}
-                disabled={isProcessing}
+                disabled={isProcessingLocal}
               >
-                {isProcessing ? (
+                {isProcessingLocal ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                     Processing...
@@ -269,7 +246,7 @@ export function SendPage() {
             </motion.div>
           )}
 
-          {isProcessing && (
+          {isProcessingLocal && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -277,7 +254,7 @@ export function SendPage() {
             >
               <Loader2 className="w-12 h-12 text-optical-green animate-spin mx-auto mb-4" />
               <p className="text-lg">Processing file...</p>
-              <p className="text-sm text-muted-foreground mt-2">Generating QR frames and calculating checksums</p>
+              <p className="text-sm text-muted-foreground mt-2">Computing SHA-256 and preparing fountain encoder</p>
             </motion.div>
           )}
         </div>

@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { generateQRCodeCanvas, getOptimalQRSize } from '@/lib/qr';
 
 interface QRDisplayProps {
-  data: string;
+  data: string | Uint8Array;
   size?: number;
   className?: string;
   onLoad?: () => void;
@@ -20,6 +20,8 @@ export function QRDisplay({ data, size, className, onLoad, onError }: QRDisplayP
 
   React.useEffect(() => {
     if (!data || !canvasRef.current) return;
+    if (data instanceof Uint8Array && data.length === 0) return;
+    if (typeof data === 'string' && data.length === 0) return;
 
     let mounted = true;
     if (!hasRenderedRef.current) {
@@ -27,7 +29,8 @@ export function QRDisplay({ data, size, className, onLoad, onError }: QRDisplayP
     }
     setError(null);
 
-    const optimalSize = size || getOptimalQRSize(data.length);
+    const dataLength = data instanceof Uint8Array ? data.length : data.length;
+    const optimalSize = size || getOptimalQRSize(dataLength);
 
     generateQRCodeCanvas(data, canvasRef.current, {
       width: optimalSize,
@@ -36,7 +39,7 @@ export function QRDisplay({ data, size, className, onLoad, onError }: QRDisplayP
         dark: '#000000',
         light: '#ffffff',
       },
-      errorCorrectionLevel: 'M',
+      errorCorrectionLevel: 'L',
     })
       .then(() => {
         if (mounted) {
@@ -79,49 +82,5 @@ export function QRDisplay({ data, size, className, onLoad, onError }: QRDisplayP
         </div>
       )}
     </div>
-  );
-}
-
-interface QRDisplaySVGProps {
-  data: string;
-  size?: number;
-  className?: string;
-}
-
-export function QRDisplaySVG({ data, size, className }: QRDisplaySVGProps) {
-  const [svg, setSvg] = React.useState<string>('');
-  const [isLoading, setIsLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    if (!data) return;
-
-    setIsLoading(true);
-    import('qrcode').then(({ toString }) => {
-      toString(data, {
-        type: 'svg',
-        width: size || getOptimalQRSize(data.length),
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#ffffff',
-        },
-        errorCorrectionLevel: 'M',
-      }).then((result) => {
-        setSvg(result);
-        setIsLoading(false);
-      });
-    });
-  }, [data, size]);
-
-  if (isLoading) {
-    return (
-      <div className={cn('relative inline-flex items-center justify-center', className)}>
-        <div className="w-64 h-64 animate-pulse bg-optical-panel rounded-lg border border-optical-border" />
-      </div>
-    );
-  }
-
-  return (
-    <div className={cn('relative inline-flex items-center justify-center', className)} dangerouslySetInnerHTML={{ __html: svg }} />
   );
 }

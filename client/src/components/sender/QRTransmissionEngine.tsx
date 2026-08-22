@@ -2,12 +2,12 @@
 
 import * as React from 'react';
 import { QRDisplay } from '@/components/qr/QRDisplay';
-import { TransferManifest } from '@optical-drop/shared/types';
+import { TransferManifest } from '@light-drop/shared/types';
 import {
   TRANSMISSION_SPEEDS,
   MANIFEST_INTERLEAVE_INTERVAL,
   TransmissionSpeed,
-} from '@optical-drop/shared/constants';
+} from '@light-drop/shared/constants';
 import { createManifestFrame, createFountainFrame } from '@/lib/protocol';
 import { FountainEncoder } from '@/lib/fountain';
 import { formatFileSize, formatNumber } from '@/lib/utils';
@@ -90,24 +90,24 @@ export function QRTransmissionEngine({
   const isFull = isFullscreen;
 
   return (
-    <div className={`flex flex-col w-full ${isFull ? 'fixed inset-0 z-50 bg-decimen-bg items-center justify-center p-0' : 'gap-4 items-center mt-4'}`}>
+    <div className={`flex flex-col w-full ${isFull ? 'fixed inset-0 z-50 bg-lightdrop-bg items-center justify-center p-0' : 'gap-4 items-center mt-4'}`}>
       
       {!isFull && (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-2 w-[min(92vw,640px)] mb-2">
-          <div className="bg-decimen-panel border border-decimen-line rounded-md px-2 py-1.5">
-            <div className="text-decimen-muted text-[10px] uppercase tracking-[0.08em]">sending</div>
-            <div className="font-mono text-[16px] text-decimen-accent truncate">{manifest.fileName}</div>
+          <div className="bg-lightdrop-panel border border-lightdrop-line rounded-md px-2 py-1.5">
+            <div className="text-lightdrop-muted text-[10px] uppercase tracking-[0.08em]">sending</div>
+            <div className="font-mono text-[16px] text-lightdrop-accent truncate">{manifest.fileName}</div>
           </div>
-          <div className="bg-decimen-panel border border-decimen-line rounded-md px-2 py-1.5">
-            <div className="text-decimen-muted text-[10px] uppercase tracking-[0.08em]">size</div>
+          <div className="bg-lightdrop-panel border border-lightdrop-line rounded-md px-2 py-1.5">
+            <div className="text-lightdrop-muted text-[10px] uppercase tracking-[0.08em]">size</div>
             <div className="font-mono text-[16px]">{formatFileSize(manifest.fileSize)}</div>
           </div>
-          <div className="bg-decimen-panel border border-decimen-line rounded-md px-2 py-1.5">
-            <div className="text-decimen-muted text-[10px] uppercase tracking-[0.08em]">tx rate</div>
-            <div className="font-mono text-[16px] text-decimen-green">{speedConfig.fps} fps</div>
+          <div className="bg-lightdrop-panel border border-lightdrop-line rounded-md px-2 py-1.5">
+            <div className="text-lightdrop-muted text-[10px] uppercase tracking-[0.08em]">tx rate</div>
+            <div className="font-mono text-[16px] text-lightdrop-green">{speedConfig.fps} fps</div>
           </div>
-          <div className="bg-decimen-panel border border-decimen-line rounded-md px-2 py-1.5">
-            <div className="text-decimen-muted text-[10px] uppercase tracking-[0.08em]">blocks</div>
+          <div className="bg-lightdrop-panel border border-lightdrop-line rounded-md px-2 py-1.5">
+            <div className="text-lightdrop-muted text-[10px] uppercase tracking-[0.08em]">blocks</div>
             <div className="font-mono text-[16px]">{formatNumber(manifest.totalBlocks)}</div>
           </div>
         </div>
@@ -127,7 +127,7 @@ export function QRTransmissionEngine({
       {!isFull && (
         <div className="flex justify-center w-full mt-4">
           <button
-            className="px-6 py-3 border border-decimen-red text-decimen-red rounded-lg font-bold hover:bg-decimen-red/10 transition-colors cursor-pointer"
+            className="px-6 py-3 border border-lightdrop-red text-lightdrop-red rounded-lg font-bold hover:bg-lightdrop-red/10 transition-colors cursor-pointer"
             onClick={onCancel}
           >
             Stop Transfer

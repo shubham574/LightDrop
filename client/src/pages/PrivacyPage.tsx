@@ -31,7 +31,7 @@ export function PrivacyPage() {
               <div className="w-8 h-8 rounded-lg bg-optical-green/20 flex items-center justify-center">
                 <Camera className="w-5 h-5 text-optical-green" />
               </div>
-              <span className="font-bold text-xl text-optical-green">OpticalDrop</span>
+              <span className="font-bold text-xl text-optical-green">LightDrop</span>
             </Link>
             <Link to="/" className="btn-secondary">
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -280,7 +280,7 @@ export function PrivacyPage() {
 
       <footer className="border-t border-optical-border py-8 px-4">
         <div className="max-w-4xl mx-auto text-center text-sm text-muted-foreground">
-          <p>OpticalDrop — Privacy-first file transfer through light</p>
+          <p>LightDrop — Privacy-first file transfer through light</p>
         </div>
       </footer>
     </div>

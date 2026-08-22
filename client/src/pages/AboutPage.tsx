@@ -34,7 +34,7 @@ export function AboutPage() {
               <div className="w-8 h-8 rounded-lg bg-optical-green/20 flex items-center justify-center">
                 <Camera className="w-5 h-5 text-optical-green" />
               </div>
-              <span className="font-bold text-xl text-optical-green">OpticalDrop</span>
+              <span className="font-bold text-xl text-optical-green">LightDrop</span>
             </Link>
             <Link to="/" className="btn-secondary">
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -52,7 +52,7 @@ export function AboutPage() {
             className="text-center space-y-6"
           >
             <h1 className="text-5xl sm:text-6xl font-bold tracking-tight">
-              How OpticalDrop Works
+              How LightDrop Works
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               A deep dive into the optical QR file transfer protocol
@@ -67,7 +67,7 @@ export function AboutPage() {
             <h2 className="section-title mb-6">Core Concept</h2>
             <div className="prose prose-invert max-w-none space-y-4">
               <p className="text-muted-foreground text-lg">
-                OpticalDrop transfers files between two devices using <strong>only a screen and a camera</strong>. 
+                LightDrop transfers files between two devices using <strong>only a screen and a camera</strong>. 
                 No Wi-Fi, no Bluetooth, no cables, no cloud. The sender displays an animated sequence of QR codes 
                 containing chunks of the file. The receiver uses its camera to scan those QR codes and reconstruct 
                 the original file.
@@ -306,7 +306,7 @@ export function AboutPage() {
 
       <footer className="border-t border-optical-border py-8 px-4">
         <div className="max-w-4xl mx-auto text-center text-sm text-muted-foreground">
-          <p>OpticalDrop — Send files through light</p>
+          <p>LightDrop — Send files through light</p>
         </div>
       </footer>
     </div>

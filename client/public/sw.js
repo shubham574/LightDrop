@@ -1,4 +1,4 @@
-// OpticalDrop Service Worker
+// LightDrop Service Worker
 // Provides offline caching and PWA functionality
 
 const CACHE_NAME = 'opticaldrop-v1';

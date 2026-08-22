@@ -17,7 +17,7 @@
     "rootDir": ".",
     "baseUrl": ".",
     "paths": {
-      "@optical-drop/shared/*": ["shared/dist/*"]
+      "@light-drop/shared/*": ["shared/dist/*"]
     }
   },
   "exclude": ["node_modules", "dist", "client/node_modules", "server/node_modules", "shared/node_modules"],

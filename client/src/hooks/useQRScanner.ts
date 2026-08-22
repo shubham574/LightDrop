@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, RefObject } from 'react';
-import { QRCodeResult } from '@optical-drop/shared/types';
+import { QRCodeResult } from '@light-drop/shared/types';
 
 interface UseQRScannerOptions {
   onDecode?: (result: QRCodeResult) => void;

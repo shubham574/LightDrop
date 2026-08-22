@@ -6,8 +6,8 @@ import {
   FRAME_TYPE_FOUNTAIN,
   DEFAULT_FOUNTAIN_OVERHEAD,
   TransmissionSpeed,
-} from '@optical-drop/shared/constants';
-import type { TransferManifest, FountainSymbol } from '@optical-drop/shared/types';
+} from '@light-drop/shared/constants';
+import type { TransferManifest, FountainSymbol } from '@light-drop/shared/types';
 import {
   generateTransferId,
   hashTransferId,
@@ -18,7 +18,7 @@ import {
   getFileSizeBucket,
   estimateSymbolsNeeded,
   estimateDuration,
-} from '@optical-drop/shared/protocol';
+} from '@light-drop/shared/protocol';
 import { FountainEncoder, FountainDecoder } from '@/lib/fountain';
 
 export interface TransferConfig {

@@ -48,7 +48,7 @@ export default {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
-        decimen: {
+        lightdrop: {
           bg: '#070a11',
           panel: '#0e1420',
           'panel-strong': '#121a29',

@@ -7,7 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@optical-drop/shared': path.resolve(__dirname, '../shared'),
+      '@light-drop/shared': path.resolve(__dirname, '../shared'),
     },
   },
   test: {

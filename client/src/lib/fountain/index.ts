@@ -1,5 +1,5 @@
 /**
- * Systematic-carousel fountain code — Ported from Decimen
+ * Systematic-carousel fountain code — Ported from LightDrop
  * 
  * Replaces the old robust-soliton LT code with a zero-overhead systematic sweep
  * followed by uniform mid-degree repair frames.

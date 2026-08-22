@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { TransferManifest, ReceiverState, SenderState } from '@optical-drop/shared/types';
+import { TransferManifest, ReceiverState, SenderState } from '@light-drop/shared/types';
 import { DEFAULT_TRANSFER_CONFIG, TransferConfig } from '@/lib/protocol';
 
 interface TransferStore {
@@ -75,7 +75,7 @@ export const useTransferStore = create<TransferStore>()(
       }),
     }),
     {
-      name: 'optical-drop-transfer',
+      name: 'light-drop-transfer',
       partialize: (state) => ({
         config: state.config,
       }),

@@ -1,8 +1,8 @@
-# OpticalDrop
+# LightDrop
 
 **Send files through light.** No Wi-Fi. No Bluetooth. No pairing. Just a screen and a camera.
 
-![OpticalDrop](https://img.shields.io/badge/version-1.0.0-blue)
+![LightDrop](https://img.shields.io/badge/version-1.0.0-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue)
 ![React](https://img.shields.io/badge/React-18.3-blue)
 ![Node.js](https://img.shields.io/badge/Node.js-20+-green)
@@ -11,7 +11,7 @@
 
 ## Overview
 
-OpticalDrop is a production-ready web application that transfers files between two devices using **only a screen and a camera**. The sender displays an animated sequence of QR codes containing chunks of the file. The receiver uses its camera to scan those QR codes and reconstruct the original file.
+LightDrop is a production-ready web application that transfers files between two devices using **only a screen and a camera**. The sender displays an animated sequence of QR codes containing chunks of the file. The receiver uses its camera to scan those QR codes and reconstruct the original file.
 
 ### Core Principle
 
@@ -77,7 +77,7 @@ graph TB
 ## Project Structure
 
 ```
-optical-drop/
+light-drop/
 ├── client/                 # React + TypeScript + Vite
 │   ├── src/
 │   │   ├── components/     # UI components (sender, receiver, QR, ui)
@@ -118,7 +118,7 @@ optical-drop/
 ```bash
 # Clone and install
 git clone <repo>
-cd optical-drop
+cd light-drop
 npm install
 
 # Start MongoDB (if not using Docker)
@@ -262,7 +262,7 @@ Records aggregate transfer statistics (no file data).
 ```env
 PORT=3001
 NODE_ENV=development
-MONGODB_URI=mongodb://localhost:27017/optical-drop
+MONGODB_URI=mongodb://localhost:27017/light-drop
 CLIENT_URL=http://localhost:5173
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=100

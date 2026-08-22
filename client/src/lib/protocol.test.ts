@@ -8,10 +8,10 @@ import {
   getTransferEstimates,
   DEFAULT_TRANSFER_CONFIG,
 } from './protocol';
-import { PROTOCOL_VERSION } from '@optical-drop/shared/constants';
+import { PROTOCOL_VERSION } from '@light-drop/shared/constants';
 
 describe('Client Protocol', () => {
-  const testFileContent = 'Hello, OpticalDrop! This is a test file for transfer. '.repeat(30);
+  const testFileContent = 'Hello, LightDrop! This is a test file for transfer. '.repeat(30);
   const testFile = new File([testFileContent], 'test.txt', { type: 'text/plain' });
 
   describe('prepareTransfer', () => {

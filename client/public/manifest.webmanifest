@@ -1,6 +1,6 @@
 {
-  "name": "OpticalDrop — Send Files Through Light",
-  "short_name": "OpticalDrop",
+  "name": "LightDrop — Send Files Through Light",
+  "short_name": "LightDrop",
   "description": "Transfer files between devices using only a screen and a camera. No Wi-Fi. No Bluetooth. No pairing.",
   "start_url": "/",
   "display": "standalone",

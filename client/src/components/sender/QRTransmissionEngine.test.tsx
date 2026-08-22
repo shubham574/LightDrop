@@ -6,7 +6,7 @@ import { prepareTransfer } from '@/lib/protocol';
 
 describe('QRTransmissionEngine Component', () => {
   it('should render transmission UI with frames without blank screen or errors', async () => {
-    const file = new File(['Hello OpticalDrop Test Content'], 'photo.jpg', { type: 'image/jpeg' });
+    const file = new File(['Hello LightDrop Test Content'], 'photo.jpg', { type: 'image/jpeg' });
     const { manifest, encoder } = await prepareTransfer(file, {
       blockSize: 256,
       speed: 'EXTREME',

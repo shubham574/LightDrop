@@ -13,8 +13,8 @@ export default defineConfig({
       },
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'OpticalDrop',
-        short_name: 'OpticalDrop',
+        name: 'LightDrop',
+        short_name: 'LightDrop',
         description: 'Send files through light - offline optical file transfer',
         theme_color: '#070a11',
         background_color: '#070a11',
@@ -72,7 +72,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@optical-drop/shared': path.resolve(__dirname, '../shared'),
+      '@light-drop/shared': path.resolve(__dirname, '../shared'),
     },
   },
   server: {

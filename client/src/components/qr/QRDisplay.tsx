@@ -72,12 +72,12 @@ export function QRDisplay({ data, size, className, onLoad, onError }: QRDisplayP
         aria-label="QR code for file transfer"
       />
       {isLoading && !hasRenderedRef.current && (
-        <div className="absolute inset-0 flex items-center justify-center bg-decimen-panel/50 rounded-lg">
-          <div className="w-8 h-8 border-4 border-decimen-accent border-t-transparent rounded-full animate-spin" />
+        <div className="absolute inset-0 flex items-center justify-center bg-lightdrop-panel/50 rounded-lg">
+          <div className="w-8 h-8 border-4 border-lightdrop-accent border-t-transparent rounded-full animate-spin" />
         </div>
       )}
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-decimen-bg/90 rounded-lg text-decimen-red p-4 text-center text-sm">
+        <div className="absolute inset-0 flex items-center justify-center bg-lightdrop-bg/90 rounded-lg text-lightdrop-red p-4 text-center text-sm">
           Failed to generate QR code
         </div>
       )}

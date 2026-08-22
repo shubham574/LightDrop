@@ -8,8 +8,8 @@ import { FountainDecoder } from '@/lib/fountain';
 import { useTransferStore } from '@/stores/transferStore';
 import { useToast } from '@/hooks/useToast';
 import { Header, Footer } from './LandingPage';
-import { TransferManifest, QRCodeResult } from '@optical-drop/shared/types';
-import { hashTransferId } from '@optical-drop/shared/protocol';
+import { TransferManifest, QRCodeResult } from '@light-drop/shared/types';
+import { hashTransferId } from '@light-drop/shared/protocol';
 
 export function ReceivePage() {
   const { toast } = useToast();
@@ -169,18 +169,18 @@ export function ReceivePage() {
   };
 
   return (
-    <div className="flex flex-col min-h-[100svh] bg-decimen-bg text-decimen-text font-mono font-[15px] leading-relaxed relative bg-[radial-gradient(circle_at_80%_-10%,rgba(88,200,255,0.07),transparent_35%)]">
+    <div className="flex flex-col min-h-[100svh] bg-lightdrop-bg text-lightdrop-text font-mono font-[15px] leading-relaxed relative bg-[radial-gradient(circle_at_80%_-10%,rgba(88,200,255,0.07),transparent_35%)]">
       <Header />
       
       <main className="flex-1 flex flex-col items-center gap-[14px] p-5 w-full">
         <section className="text-center mb-4">
-          <p className="m-0 mb-2 text-decimen-accent text-[11px] font-bold tracking-[0.14em] uppercase">This camera receives</p>
-          <h1 className="m-0 text-decimen-accent text-[16px] tracking-[0.12em] uppercase">Point and receive</h1>
-          <p className="mt-2 text-decimen-muted text-[13px] max-w-[640px] text-center">Point your camera at the sender's screen to receive the file.</p>
+          <p className="m-0 mb-2 text-lightdrop-accent text-[11px] font-bold tracking-[0.14em] uppercase">This camera receives</p>
+          <h1 className="m-0 text-lightdrop-accent text-[16px] tracking-[0.12em] uppercase">Point and receive</h1>
+          <p className="mt-2 text-lightdrop-muted text-[13px] max-w-[640px] text-center">Point your camera at the sender's screen to receive the file.</p>
         </section>
 
         {!reconstructedFile && receiver.status !== 'error' && (
-          <div className="relative w-[min(92vw,480px)] rounded-[10px] overflow-hidden bg-black aspect-video flex-none border border-decimen-line">
+          <div className="relative w-[min(92vw,480px)] rounded-[10px] overflow-hidden bg-black aspect-video flex-none border border-lightdrop-line">
             <video
               ref={videoRef}
               className="w-full h-full object-cover block"
@@ -191,7 +191,7 @@ export function ReceivePage() {
               <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                 <button
                   onClick={startScanning}
-                  className="px-6 py-3 bg-decimen-accent text-decimen-accent-ink rounded-lg font-bold hover:bg-decimen-accent-hi transition-colors"
+                  className="px-6 py-3 bg-lightdrop-accent text-lightdrop-accent-ink rounded-lg font-bold hover:bg-lightdrop-accent-hi transition-colors"
                 >
                   Start Camera
                 </button>
@@ -201,26 +201,26 @@ export function ReceivePage() {
         )}
 
         {isScanning && !currentManifest && (
-          <div className="text-center text-decimen-muted text-[13px] mt-4">
+          <div className="text-center text-lightdrop-muted text-[13px] mt-4">
             Waiting for QR codes...
           </div>
         )}
 
         {currentManifest && !reconstructedFile && receiver.status !== 'error' && (
           <div className="w-[min(92vw,480px)] flex flex-col gap-2 mt-4">
-            <div className="flex justify-between items-end text-[13px] font-mono text-decimen-muted">
-              <span className="truncate max-w-[200px] text-decimen-text">{currentManifest.fileName}</span>
-              <span className="text-decimen-accent font-bold">{(receiver.progress || 0).toFixed(1)}%</span>
+            <div className="flex justify-between items-end text-[13px] font-mono text-lightdrop-muted">
+              <span className="truncate max-w-[200px] text-lightdrop-text">{currentManifest.fileName}</span>
+              <span className="text-lightdrop-accent font-bold">{(receiver.progress || 0).toFixed(1)}%</span>
             </div>
             
-            <div className="w-full h-[14px] bg-decimen-panel border border-decimen-line rounded-[7px] overflow-hidden flex-none">
+            <div className="w-full h-[14px] bg-lightdrop-panel border border-lightdrop-line rounded-[7px] overflow-hidden flex-none">
               <div 
-                className="h-full bg-decimen-accent transition-[width] duration-250 ease-out"
+                className="h-full bg-lightdrop-accent transition-[width] duration-250 ease-out"
                 style={{ width: `${receiver.progress || 0}%` }}
               />
             </div>
             
-            <div className="flex justify-between text-[11px] text-decimen-muted uppercase tracking-[0.04em] mt-1">
+            <div className="flex justify-between text-[11px] text-lightdrop-muted uppercase tracking-[0.04em] mt-1">
               <span>{receiver.decodedBlocks} / {currentManifest.totalBlocks} Blocks</span>
               <span>{isReconstructing ? 'Reconstructing...' : 'Receiving...'}</span>
             </div>
@@ -229,19 +229,19 @@ export function ReceivePage() {
 
         {reconstructedFile && currentManifest && (
           <div className="w-[min(92vw,640px)] flex flex-col items-center gap-[14px] mt-4">
-            <div className="text-decimen-text text-[22px] font-bold">SHA-256 verified ✓</div>
-            <p className="text-decimen-muted">File: {currentManifest.fileName} ({formatFileSize(currentManifest.fileSize)})</p>
+            <div className="text-lightdrop-text text-[22px] font-bold">SHA-256 verified ✓</div>
+            <p className="text-lightdrop-muted">File: {currentManifest.fileName} ({formatFileSize(currentManifest.fileSize)})</p>
             
             <button 
               onClick={handleDownload}
-              className="inline-block max-w-full break-words text-decimen-accent-ink bg-decimen-accent rounded-lg px-[20px] py-[12px] text-[16px] font-bold no-underline transition-colors hover:bg-decimen-accent-hi mt-4"
+              className="inline-block max-w-full break-words text-lightdrop-accent-ink bg-lightdrop-accent rounded-lg px-[20px] py-[12px] text-[16px] font-bold no-underline transition-colors hover:bg-lightdrop-accent-hi mt-4"
             >
               Save {currentManifest.fileName}
             </button>
             
             <button 
               onClick={handleReset}
-              className="mt-4 px-4 py-2 border border-decimen-line rounded-lg text-decimen-muted text-[13px] hover:text-decimen-text hover:border-decimen-text transition-colors"
+              className="mt-4 px-4 py-2 border border-lightdrop-line rounded-lg text-lightdrop-muted text-[13px] hover:text-lightdrop-text hover:border-lightdrop-text transition-colors"
             >
               Receive another
             </button>
@@ -250,12 +250,12 @@ export function ReceivePage() {
 
         {receiver.status === 'error' && (
           <div className="w-[min(92vw,640px)] flex flex-col items-center gap-[14px] mt-4">
-            <div className="text-decimen-red text-[22px] font-bold">Verification Failed ✗</div>
-            <p className="text-decimen-muted">{receiver.errorMessage}</p>
+            <div className="text-lightdrop-red text-[22px] font-bold">Verification Failed ✗</div>
+            <p className="text-lightdrop-muted">{receiver.errorMessage}</p>
             
             <button 
               onClick={handleReset}
-              className="mt-4 px-4 py-2 border border-decimen-red text-decimen-red rounded-lg text-[13px] hover:bg-decimen-red/10 transition-colors"
+              className="mt-4 px-4 py-2 border border-lightdrop-red text-lightdrop-red rounded-lg text-[13px] hover:bg-lightdrop-red/10 transition-colors"
             >
               Try Again
             </button>

@@ -27,7 +27,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
   if (type === 'decode') {
     try {
       const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: 'attemptBoth',
+        inversionAttempts: 'dontInvert',
       });
       
       const result: DecodeResult = {

@@ -33,6 +33,7 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
   const scanIntervalRef = useRef<ReturnType<typeof setTimeout>>();
   const pendingIdRef = useRef(0);
   const onDecodeRef = useRef(onDecode);
+  const isWorkerBusyRef = useRef(false);
   
   const isStartingRef = useRef(false);
 
@@ -46,6 +47,7 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
       workerRef.current = new Worker(new URL('../workers/qrDecoder.worker.ts', import.meta.url), { type: 'module' });
       
       workerRef.current.onmessage = (event) => {
+        isWorkerBusyRef.current = false;
         const { id, data, binaryData, location } = event.data;
         if (data || binaryData) {
           const result: QRCodeResult = {
@@ -59,6 +61,7 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
       };
       
       workerRef.current.onerror = (err) => {
+        isWorkerBusyRef.current = false;
         console.error('QR Worker error:', err);
         setError('QR decoder worker error');
       };
@@ -79,13 +82,32 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
       return;
     }
     
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    if (isWorkerBusyRef.current) {
+      return;
+    }
     
-    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      return;
+    }
+    
+    const MAX_DIM = 720;
+    let w = video.videoWidth;
+    let h = video.videoHeight;
+    
+    if (w > MAX_DIM || h > MAX_DIM) {
+      const ratio = Math.min(MAX_DIM / w, MAX_DIM / h);
+      w = Math.round(w * ratio);
+      h = Math.round(h * ratio);
+    }
+    
+    canvas.width = w;
+    canvas.height = h;
+    context.drawImage(video, 0, 0, w, h);
+    
+    const imageData = context.getImageData(0, 0, w, h);
     const id = ++pendingIdRef.current;
     
+    isWorkerBusyRef.current = true;
     worker.postMessage({ type: 'decode', imageData, id });
   }, []);
   
@@ -120,7 +142,11 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
       
       const scanLoop = () => {
         if (isScanningRef.current) {
-          processFrame();
+          try {
+            processFrame();
+          } catch (e) {
+            console.warn('QR scan error:', e);
+          }
           scanIntervalRef.current = setTimeout(scanLoop, scanInterval);
         }
       };

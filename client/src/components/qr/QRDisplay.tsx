@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { generateQRCodeCanvas, getOptimalQRSize } from '@/lib/qr';
+import { DEFAULT_QR_ERROR_CORRECTION } from '@light-drop/shared/constants';
 
 interface QRDisplayProps {
   data: string | Uint8Array;
@@ -30,19 +31,24 @@ export function QRDisplay({ data, size, className, onLoad, onError }: QRDisplayP
     setError(null);
 
     const dataLength = data instanceof Uint8Array ? data.length : data.length;
-    const optimalSize = size || getOptimalQRSize(dataLength);
+    const ecLevel = DEFAULT_QR_ERROR_CORRECTION as 'L' | 'M' | 'Q' | 'H';
+    const baseOptimalSize = size || getOptimalQRSize(dataLength, ecLevel);
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    const renderSize = Math.round(baseOptimalSize * dpr);
 
     generateQRCodeCanvas(data, canvasRef.current, {
-      width: optimalSize,
+      width: renderSize,
       margin: 2,
       color: {
         dark: '#000000',
         light: '#ffffff',
       },
-      errorCorrectionLevel: 'L',
+      errorCorrectionLevel: ecLevel,
     })
       .then(() => {
-        if (mounted) {
+        if (mounted && canvasRef.current) {
+          canvasRef.current.style.width = `${baseOptimalSize}px`;
+          canvasRef.current.style.height = `${baseOptimalSize}px`;
           hasRenderedRef.current = true;
           setIsLoading(false);
           onLoad?.();
@@ -62,11 +68,11 @@ export function QRDisplay({ data, size, className, onLoad, onError }: QRDisplayP
   }, [data, size, onLoad, onError]);
 
   return (
-    <div className={cn('relative inline-flex items-center justify-center', className)}>
+    <div className={cn('relative inline-flex items-center justify-center overflow-hidden', className)}>
       <canvas
         ref={canvasRef}
         className={cn(
-          'qr-canvas rounded-none bg-white transition-opacity duration-150',
+          'qr-canvas rounded-none bg-white transition-opacity duration-150 max-w-full max-h-full',
           isLoading && !hasRenderedRef.current && 'opacity-0'
         )}
         aria-label="QR code for file transfer"

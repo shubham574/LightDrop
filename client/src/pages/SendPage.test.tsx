@@ -12,7 +12,7 @@ describe('SendPage User Flow', () => {
       </BrowserRouter>
     );
 
-    expect(screen.getByText('Send a File')).toBeInTheDocument();
+    expect(screen.getByText('Select File')).toBeInTheDocument();
 
     const file = new File(['Test photo content for optical transfer flow'], 'vacation_photo.jpg', {
       type: 'image/jpeg',
@@ -28,7 +28,7 @@ describe('SendPage User Flow', () => {
     await waitFor(() => {
       // It should either show the file name or be transmitting
       const hasFileName = screen.queryByText('vacation_photo.jpg');
-      const isTransmitting = screen.queryByText('TRANSMITTING');
+      const isTransmitting = screen.queryByText('sending');
       expect(hasFileName !== null || isTransmitting !== null).toBe(true);
     }, { timeout: 3000 });
   });

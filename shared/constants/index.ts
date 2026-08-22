@@ -31,7 +31,7 @@ export const QR_ERROR_CORRECTION_LEVELS = {
   H: 'H',
 } as const;
 
-export const DEFAULT_QR_ERROR_CORRECTION = QR_ERROR_CORRECTION_LEVELS.L;
+export const DEFAULT_QR_ERROR_CORRECTION = QR_ERROR_CORRECTION_LEVELS.M;
 
 export const CAMERA_CONSTRAINTS = {
   facingMode: 'environment' as const,

@@ -90,7 +90,7 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
       return;
     }
     
-    const MAX_DIM = 720;
+    const MAX_DIM = 960;
     let w = video.videoWidth;
     let h = video.videoHeight;
     
@@ -147,11 +147,11 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
           } catch (e) {
             console.warn('QR scan error:', e);
           }
-          scanIntervalRef.current = setTimeout(scanLoop, scanInterval);
+          animationRef.current = requestAnimationFrame(scanLoop);
         }
       };
       
-      scanLoop();
+      animationRef.current = requestAnimationFrame(scanLoop);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to access camera');
       isScanningRef.current = false;
@@ -159,7 +159,7 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
     } finally {
       isStartingRef.current = false;
     }
-  }, [enabled, processFrame, scanInterval]);
+  }, [enabled, processFrame]);
   
   const stopScanning = useCallback(() => {
     isScanningRef.current = false;

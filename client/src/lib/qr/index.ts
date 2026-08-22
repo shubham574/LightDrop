@@ -17,7 +17,7 @@ export const DEFAULT_QR_OPTIONS: QRCodeOptions = {
     dark: '#000000',
     light: '#ffffff',
   },
-  errorCorrectionLevel: 'L',
+  errorCorrectionLevel: 'M',
 };
 
 export async function generateQRCodeDataURL(
@@ -52,12 +52,22 @@ export async function generateQRCodeSVG(
   return QRCode.toString(data, { ...opts, type: 'svg' });
 }
 
-export function getOptimalQRSize(dataLength: number): number {
-  if (dataLength < 100) return 200;
-  if (dataLength < 300) return 256;
-  if (dataLength < 800) return 300;
-  if (dataLength < 1500) return 350;
-  return 400;
+export function getOptimalQRSize(
+  dataLength: number,
+  errorCorrectionLevel: 'L' | 'M' | 'Q' | 'H' = 'M'
+): number {
+  const PX_PER_MODULE = 8;
+  const MARGIN_MODULES = 4;
+  let version = 40;
+  for (let v = 1; v <= 40; v++) {
+    if (calculateQRCapacity(v, errorCorrectionLevel) >= dataLength) {
+      version = v;
+      break;
+    }
+  }
+  const modules = version * 4 + 17;
+  const size = Math.round((modules + MARGIN_MODULES * 2) * PX_PER_MODULE);
+  return Math.min(1000, Math.max(220, size));
 }
 
 export function getMaxBinaryCapacity(version: number, errorCorrection: 'L' | 'M' | 'Q' | 'H'): number {

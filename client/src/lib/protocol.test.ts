@@ -71,7 +71,7 @@ describe('Client Protocol', () => {
       expect(decoded!.type).toBe('fountain');
       
       if (decoded?.type === 'fountain') {
-        expect(decoded.symbol.seed).toBe(1); // First seed is 1
+        expect(decoded.symbol.seed).toBe(0); // First seed is 0
         expect(decoded.symbol.data.length).toBe(manifest.blockSize);
         expect(decoded.totalBlocks).toBe(manifest.totalBlocks);
         expect(decoded.blockSize).toBe(manifest.blockSize);

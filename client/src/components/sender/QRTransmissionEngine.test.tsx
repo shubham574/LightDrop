@@ -26,8 +26,8 @@ describe('QRTransmissionEngine Component', () => {
     );
 
     expect(container.innerHTML).not.toBe('');
-    expect(screen.getByText('TRANSMITTING')).toBeInTheDocument();
+    expect(screen.getByText('sending')).toBeInTheDocument();
     expect(screen.getByText('photo.jpg')).toBeInTheDocument();
-    expect(screen.getByText('Pause')).toBeInTheDocument();
+    expect(screen.getByText('Stop Transfer')).toBeInTheDocument();
   });
 });

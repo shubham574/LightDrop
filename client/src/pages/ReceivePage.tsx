@@ -23,6 +23,7 @@ export function ReceivePage() {
   const [decoder, setDecoder] = React.useState<FountainDecoder | null>(null);
   const [isReconstructing, setIsReconstructing] = React.useState(false);
   const [reconstructedFile, setReconstructedFile] = React.useState<Blob | null>(null);
+  const [snippetText, setSnippetText] = React.useState<string | null>(null);
 
   const decoderRef = React.useRef<FountainDecoder | null>(null);
   const manifestRef = React.useRef<TransferManifest | null>(null);
@@ -131,8 +132,18 @@ export function ReceivePage() {
         const blob = new Blob([fileData.buffer as ArrayBuffer], { type: manifest.mimeType });
         setReconstructedFile(blob);
         setReceiverState({ status: 'complete', progress: 100 });
+        
+        if (manifest.fileName === 'lightdrop-snippet.txt') {
+          try {
+            const text = new TextDecoder().decode(fileData);
+            setSnippetText(text);
+          } catch (e) {
+            console.error('Failed to decode snippet text', e);
+          }
+        }
+
         stopScanning();
-        toast({ title: 'Transfer Complete', description: `${manifest.fileName} received successfully` });
+        toast({ title: 'Transfer Complete', description: manifest.fileName === 'lightdrop-snippet.txt' ? 'Text snippet received successfully' : `${manifest.fileName} received successfully` });
       } else {
         setReceiverState({ status: 'error', errorMessage: 'Checksum verification failed.' });
         toast({ title: 'Verification Failed', description: 'File integrity check failed.', variant: 'destructive' });
@@ -157,6 +168,17 @@ export function ReceivePage() {
     }
   };
 
+  const handleCopy = async () => {
+    if (snippetText) {
+      try {
+        await navigator.clipboard.writeText(snippetText);
+        toast({ title: 'Copied', description: 'Text copied to clipboard' });
+      } catch (err) {
+        toast({ title: 'Error', description: 'Failed to copy text', variant: 'destructive' });
+      }
+    }
+  };
+
   const handleReset = () => {
     resetReceiver();
     setCurrentManifest(null);
@@ -164,6 +186,7 @@ export function ReceivePage() {
     decoderRef.current = null;
     setDecoder(null);
     setReconstructedFile(null);
+    setSnippetText(null);
     reconstructingRef.current = false;
     startScanning();
   };
@@ -230,14 +253,35 @@ export function ReceivePage() {
         {reconstructedFile && currentManifest && (
           <div className="w-[min(92vw,640px)] flex flex-col items-center gap-[14px] mt-4">
             <div className="text-lightdrop-text text-[22px] font-bold">SHA-256 verified ✓</div>
-            <p className="text-lightdrop-muted">File: {currentManifest.fileName} ({formatFileSize(currentManifest.fileSize)})</p>
             
-            <button 
-              onClick={handleDownload}
-              className="inline-block max-w-full break-words text-lightdrop-accent-ink bg-lightdrop-accent rounded-lg px-[20px] py-[12px] text-[16px] font-bold no-underline transition-colors hover:bg-lightdrop-accent-hi mt-4"
-            >
-              Save {currentManifest.fileName}
-            </button>
+            {snippetText !== null ? (
+              <>
+                <p className="text-lightdrop-muted">Text Snippet Received</p>
+                <div className="w-full relative group">
+                  <textarea
+                    readOnly
+                    value={snippetText}
+                    className="w-full h-[150px] bg-lightdrop-panel border border-lightdrop-line rounded-lg p-3 text-lightdrop-text font-sans resize-none focus:outline-none focus:border-lightdrop-accent transition-colors"
+                  />
+                </div>
+                <button 
+                  onClick={handleCopy}
+                  className="inline-block w-full break-words text-lightdrop-accent-ink bg-lightdrop-accent rounded-lg px-[20px] py-[12px] text-[16px] font-bold no-underline transition-colors hover:bg-lightdrop-accent-hi mt-2"
+                >
+                  Copy to Clipboard
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-lightdrop-muted">File: {currentManifest.fileName} ({formatFileSize(currentManifest.fileSize)})</p>
+                <button 
+                  onClick={handleDownload}
+                  className="inline-block max-w-full break-words text-lightdrop-accent-ink bg-lightdrop-accent rounded-lg px-[20px] py-[12px] text-[16px] font-bold no-underline transition-colors hover:bg-lightdrop-accent-hi mt-4"
+                >
+                  Save {currentManifest.fileName}
+                </button>
+              </>
+            )}
             
             <button 
               onClick={handleReset}

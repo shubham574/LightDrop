@@ -20,6 +20,8 @@ export function SendPage() {
   } = useTransferStore();
   
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  const [sendMode, setSendMode] = React.useState<'file' | 'snippet'>('file');
+  const [textSnippet, setTextSnippet] = React.useState('');
   const [isProcessing, setIsProcessing] = React.useState(false);
   const [prepared, setPrepared] = React.useState<PreparedTransfer | null>(null);
   const [estimates, setEstimates] = React.useState<any>(null);
@@ -32,15 +34,21 @@ export function SendPage() {
         return;
       }
       setSelectedFile(file);
+      setSendMode('file');
       setEstimates(getTransferEstimates(file.size, config));
     }
   }, [config, toast]);
 
   React.useEffect(() => {
-    if (selectedFile) {
+    if (sendMode === 'file' && selectedFile) {
       setEstimates(getTransferEstimates(selectedFile.size, config));
+    } else if (sendMode === 'snippet' && textSnippet) {
+      const blob = new Blob([textSnippet], { type: 'text/plain' });
+      setEstimates(getTransferEstimates(blob.size, config));
+    } else {
+      setEstimates(null);
     }
-  }, [selectedFile, config]);
+  }, [selectedFile, textSnippet, sendMode, config]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, noClick: false });
 
@@ -72,9 +80,19 @@ export function SendPage() {
     }
   };
 
+  const handleStartTransmission = () => {
+    if (sendMode === 'snippet' && textSnippet) {
+      const snippetFile = new File([textSnippet], 'lightdrop-snippet.txt', { type: 'text/plain' });
+      processFile(snippetFile);
+    } else if (sendMode === 'file' && selectedFile) {
+      processFile(selectedFile);
+    }
+  };
+
   const handleCancel = () => {
     resetSender();
     setSelectedFile(null);
+    setTextSnippet('');
     setPrepared(null);
     setEstimates(null);
   };
@@ -111,17 +129,32 @@ export function SendPage() {
         </section>
 
         <div className="flex gap-2 p-1 border border-lightdrop-line rounded-full uppercase text-[11px] tracking-[0.06em] text-lightdrop-muted font-mono mb-4">
-          <label className="flex items-center gap-2 px-3 py-1 bg-lightdrop-panel border border-lightdrop-line-bright rounded-full text-lightdrop-text cursor-pointer">
-            <input type="radio" name="send-mode" value="file" defaultChecked className="hidden" />
+          <label className={cn(
+            "flex items-center gap-2 px-3 py-1 rounded-full cursor-pointer transition-colors",
+            sendMode === 'file' ? "bg-lightdrop-panel border border-lightdrop-line-bright text-lightdrop-text" : "border border-transparent hover:text-lightdrop-text"
+          )}>
+            <input type="radio" name="send-mode" value="file" checked={sendMode === 'file'} onChange={() => setSendMode('file')} className="hidden" />
             <span>File</span>
           </label>
-          <label className="flex items-center gap-2 px-3 py-1 border border-transparent rounded-full cursor-pointer hover:text-lightdrop-text">
-            <input type="radio" name="send-mode" value="snippet" disabled className="hidden" />
-            <span className="opacity-50">Text snippet (Coming soon)</span>
+          <label className={cn(
+            "flex items-center gap-2 px-3 py-1 rounded-full cursor-pointer transition-colors",
+            sendMode === 'snippet' ? "bg-lightdrop-panel border border-lightdrop-line-bright text-lightdrop-text" : "border border-transparent hover:text-lightdrop-text"
+          )}>
+            <input type="radio" name="send-mode" value="snippet" checked={sendMode === 'snippet'} onChange={() => setSendMode('snippet')} className="hidden" />
+            <span>Text / Link</span>
           </label>
         </div>
 
-        {!selectedFile ? (
+        {sendMode === 'snippet' ? (
+          <div className="relative w-[min(92vw,640px)] flex flex-col gap-2">
+            <textarea
+              className="w-full h-[150px] bg-lightdrop-panel border border-lightdrop-line rounded-lg p-3 text-lightdrop-text font-sans resize-none focus:outline-none focus:border-lightdrop-accent transition-colors"
+              placeholder="Type or paste text/link here..."
+              value={textSnippet}
+              onChange={(e) => setTextSnippet(e.target.value)}
+            />
+          </div>
+        ) : !selectedFile ? (
           <div {...getRootProps()} className={cn(
             "relative w-[min(92vw,640px)] flex items-center gap-[14px] bg-lightdrop-panel border border-lightdrop-line-bright rounded-lg p-[14px_16px] cursor-pointer transition-colors hover:border-lightdrop-accent",
             isDragActive ? "border-lightdrop-accent bg-lightdrop-panel-strong" : ""
@@ -149,7 +182,7 @@ export function SendPage() {
           </div>
         )}
 
-        {selectedFile && (
+        {(selectedFile || (sendMode === 'snippet' && textSnippet.length > 0)) && (
           <details className="w-[min(92vw,640px)] bg-lightdrop-panel border border-lightdrop-line rounded-lg p-[8px_12px] open:pb-4 mt-2" open>
             <summary className="cursor-pointer text-lightdrop-text-dim text-[13px] font-bold uppercase tracking-[0.08em] select-none">
               Transfer settings
@@ -201,7 +234,7 @@ export function SendPage() {
             <div className="mt-6 flex justify-center">
               <button
                 className="w-full text-lightdrop-accent-ink bg-lightdrop-accent border-0 rounded-lg px-[36px] py-[14px] text-[18px] font-bold cursor-pointer transition-colors hover:bg-lightdrop-accent-hi disabled:opacity-50"
-                onClick={() => processFile(selectedFile)}
+                onClick={handleStartTransmission}
                 disabled={isProcessing}
               >
                 {isProcessing ? 'Preparing...' : 'Start transmission'}
@@ -210,7 +243,7 @@ export function SendPage() {
           </details>
         )}
 
-        {!selectedFile && (
+        {sendMode === 'file' && !selectedFile && (
           <div className="text-lightdrop-muted text-[13px] text-center max-w-[640px] mt-4">
             Choose a file to begin
           </div>

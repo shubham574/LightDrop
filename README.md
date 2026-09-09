@@ -177,10 +177,11 @@ docker-compose down
 
 | Preset | FPS | Frame Delay | Best For |
 |--------|-----|-------------|----------|
-| Compatibility | 2 | 500ms | Low light, old devices, distance |
-| Balanced | 5 | 200ms | **Default** - most situations |
-| Fast | 10 | 100ms | Good lighting, modern devices |
-| Extreme | 20 | 50ms | Perfect conditions, testing |
+| Compatibility | 5 | 200ms | Low light, old devices, distance |
+| Balanced | 10 | 100ms | Most situations |
+| Fast | 15 | 66ms | Good lighting, modern devices |
+| Extreme | 30 | 33ms | **Default** - bright screen, close range |
+| Hyper | 60 | 16ms | Perfect conditions, maximum throughput |
 
 ### Tips for Reliable Transfer
 
@@ -296,10 +297,22 @@ VITE_API_URL=http://localhost:3001/api
 
 ## Performance
 
-- **Chunk size**: 512-2048 bytes (configurable)
-- **Throughput**: ~1-50 KB/s depending on speed preset
+- **Block size**: 64–2048 bytes (configurable, up to 2200 max)
+- **Throughput**: ~1–100 KB/s depending on speed preset and block size
+- **QR error correction**: Level L (protocol-layer fountain codes handle frame recovery)
 - **Memory**: Streaming-style processing, no full file duplication
-- **Workers**: QR decoding offloaded to Web Worker
+- **Decode workers**: QR decoding parallelized across up to 4 Web Workers (round-robin pool)
+- **Encode worker**: QR generation offloaded to a dedicated Web Worker for smooth 60fps display
+
+### Image Optimization
+
+When sending images, LightDrop can automatically resize and re-encode them before transfer to dramatically reduce file size:
+
+- **Enabled by default** — toggle "Optimize image before sending" in Transfer Settings to opt out
+- **Max dimension**: 2000px (scales down preserving aspect ratio, never up)
+- **Output format**: WebP at 85% quality (JPEG fallback if WebP unsupported)
+- **Size display**: Shows before/after file size (e.g. "6.1 MB → 740 KB")
+- **Safe**: Returns the original file unchanged if optimization doesn't actually shrink it
 
 ## Known Limitations
 

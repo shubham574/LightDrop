@@ -22,8 +22,8 @@ function renderModules(
   dpr: number
 ) {
   const totalModules = moduleCount + margin * 2;
-  const scale = Math.floor((targetSize * dpr) / totalModules) || 1;
-  const canvasSize = totalModules * scale;
+  const canvasSize = Math.round(targetSize * dpr);
+  const scale = canvasSize / totalModules;
   
   canvas.width = canvasSize;
   canvas.height = canvasSize;
@@ -31,6 +31,8 @@ function renderModules(
   canvas.style.height = `${targetSize}px`;
   
   const ctx = canvas.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
+  
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvasSize, canvasSize);
   
@@ -38,12 +40,12 @@ function renderModules(
   for (let row = 0; row < moduleCount; row++) {
     for (let col = 0; col < moduleCount; col++) {
       if (modules[row * moduleCount + col]) {
-        ctx.fillRect(
-          (col + margin) * scale,
-          (row + margin) * scale,
-          scale,
-          scale
-        );
+        const x = Math.round((col + margin) * scale);
+        const y = Math.round((row + margin) * scale);
+        const w = Math.ceil((col + margin + 1) * scale) - x;
+        const h = Math.ceil((row + margin + 1) * scale) - y;
+        
+        ctx.fillRect(x, y, w, h);
       }
     }
   }

@@ -17,7 +17,7 @@ export const DEFAULT_QR_OPTIONS: QRCodeOptions = {
     dark: '#000000',
     light: '#ffffff',
   },
-  errorCorrectionLevel: 'M',
+  errorCorrectionLevel: 'L',
 };
 
 export async function generateQRCodeDataURL(
@@ -54,7 +54,7 @@ export async function generateQRCodeSVG(
 
 export function getOptimalQRSize(
   dataLength: number,
-  errorCorrectionLevel: 'L' | 'M' | 'Q' | 'H' = 'M'
+  errorCorrectionLevel: 'L' | 'M' | 'Q' | 'H' = 'L'
 ): number {
   const PX_PER_MODULE = 8;
   const MARGIN_MODULES = 4;

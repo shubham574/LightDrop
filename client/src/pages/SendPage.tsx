@@ -201,7 +201,10 @@ export function SendPage() {
                   <option value={256}>256 bytes (default)</option>
                   <option value={512}>512 bytes</option>
                   <option value={1024}>1 KB</option>
+                  <option value={1536}>1.5 KB</option>
+                  <option value={2048}>2 KB — best lighting</option>
                 </select>
+                <span className="text-[10px] text-lightdrop-muted mt-1">Larger blocks need brighter, steadier, closer scan</span>
               </label>
 
               <label className="flex flex-col gap-[3px] text-[11px] text-lightdrop-muted uppercase tracking-[0.08em]">

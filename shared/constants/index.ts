@@ -2,7 +2,7 @@ export const PROTOCOL_VERSION = 2;
 
 export const DEFAULT_BLOCK_SIZE = 256;
 export const MIN_BLOCK_SIZE = 64;
-export const MAX_BLOCK_SIZE = 1024;
+export const MAX_BLOCK_SIZE = 2200;
 
 export const FOUNTAIN_FRAME_HEADER_SIZE = 20;
 export const MANIFEST_MAGIC = 0x4F44; // 'OD' in hex
@@ -31,7 +31,7 @@ export const QR_ERROR_CORRECTION_LEVELS = {
   H: 'H',
 } as const;
 
-export const DEFAULT_QR_ERROR_CORRECTION = QR_ERROR_CORRECTION_LEVELS.M;
+export const DEFAULT_QR_ERROR_CORRECTION = QR_ERROR_CORRECTION_LEVELS.L;
 
 export const CAMERA_CONSTRAINTS = {
   facingMode: 'environment' as const,

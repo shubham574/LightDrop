@@ -13,11 +13,59 @@ interface QRDisplayProps {
   onError?: (error: Error) => void;
 }
 
+function renderModules(
+  canvas: HTMLCanvasElement,
+  modules: number[],
+  moduleCount: number,
+  margin: number,
+  targetSize: number,
+  dpr: number
+) {
+  const totalModules = moduleCount + margin * 2;
+  const scale = Math.floor((targetSize * dpr) / totalModules) || 1;
+  const canvasSize = totalModules * scale;
+  
+  canvas.width = canvasSize;
+  canvas.height = canvasSize;
+  canvas.style.width = `${targetSize}px`;
+  canvas.style.height = `${targetSize}px`;
+  
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvasSize, canvasSize);
+  
+  ctx.fillStyle = '#000000';
+  for (let row = 0; row < moduleCount; row++) {
+    for (let col = 0; col < moduleCount; col++) {
+      if (modules[row * moduleCount + col]) {
+        ctx.fillRect(
+          (col + margin) * scale,
+          (row + margin) * scale,
+          scale,
+          scale
+        );
+      }
+    }
+  }
+}
+
 export function QRDisplay({ data, size, className, onLoad, onError }: QRDisplayProps) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const hasRenderedRef = React.useRef(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<Error | null>(null);
+
+  const workerRef = React.useRef<Worker | null>(null);
+  const pendingIdRef = React.useRef<number>(0);
+
+  React.useEffect(() => {
+    if (typeof Worker !== 'undefined') {
+      workerRef.current = new Worker(new URL('../../workers/qrEncoder.worker.ts', import.meta.url), { type: 'module' });
+    }
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
 
   React.useEffect(() => {
     if (!data || !canvasRef.current) return;
@@ -35,32 +83,78 @@ export function QRDisplay({ data, size, className, onLoad, onError }: QRDisplayP
     const baseOptimalSize = size || getOptimalQRSize(dataLength, ecLevel);
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
     const renderSize = Math.round(baseOptimalSize * dpr);
+    const margin = 2;
 
-    generateQRCodeCanvas(data, canvasRef.current, {
-      width: renderSize,
-      margin: 2,
-      color: {
-        dark: '#000000',
-        light: '#ffffff',
-      },
-      errorCorrectionLevel: ecLevel,
-    })
-      .then(() => {
-        if (mounted && canvasRef.current) {
-          canvasRef.current.style.width = `${baseOptimalSize}px`;
-          canvasRef.current.style.height = `${baseOptimalSize}px`;
-          hasRenderedRef.current = true;
-          setIsLoading(false);
-          onLoad?.();
+    if (workerRef.current) {
+      const id = ++pendingIdRef.current;
+      
+      const onMessage = (e: MessageEvent) => {
+        if (e.data.id === id) {
+          workerRef.current?.removeEventListener('message', onMessage);
+          
+          if (mounted && canvasRef.current) {
+            if (e.data.error) {
+              const err = new Error(e.data.error);
+              setError(err);
+              setIsLoading(false);
+              onError?.(err);
+            } else {
+              renderModules(
+                canvasRef.current,
+                e.data.modules,
+                e.data.size,
+                margin,
+                baseOptimalSize,
+                dpr
+              );
+              hasRenderedRef.current = true;
+              setIsLoading(false);
+              onLoad?.();
+            }
+          }
         }
-      })
-      .catch((err) => {
-        if (mounted) {
-          setError(err);
-          setIsLoading(false);
-          onError?.(err);
-        }
+      };
+      
+      workerRef.current.addEventListener('message', onMessage);
+      
+      const plainData = data instanceof Uint8Array 
+        ? Array.from(data) 
+        : Array.from(new TextEncoder().encode(data));
+
+      workerRef.current.postMessage({
+        type: 'generate',
+        id,
+        data: plainData,
+        errorCorrectionLevel: ecLevel,
+        margin
       });
+    } else {
+      generateQRCodeCanvas(data, canvasRef.current, {
+        width: renderSize,
+        margin,
+        color: {
+          dark: '#000000',
+          light: '#ffffff',
+        },
+        errorCorrectionLevel: ecLevel,
+      })
+        .then(() => {
+          if (mounted && canvasRef.current) {
+            canvasRef.current.style.width = `${baseOptimalSize}px`;
+            canvasRef.current.style.height = `${baseOptimalSize}px`;
+            hasRenderedRef.current = true;
+            setIsLoading(false);
+            onLoad?.();
+          }
+        })
+        .catch((err) => {
+          if (mounted) {
+            setError(err);
+            setIsLoading(false);
+            onError?.(err);
+          }
+        });
+    }
 
     return () => {
       mounted = false;

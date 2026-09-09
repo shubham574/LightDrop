@@ -129,7 +129,7 @@ export function ReceivePage() {
       const valid = await verifyChecksum(fileData, manifest.checksum);
 
       if (valid) {
-        const blob = new Blob([fileData], { type: manifest.mimeType });
+        const blob = new Blob([fileData as BlobPart], { type: manifest.mimeType });
         setReconstructedFile(blob);
         setReceiverState({ status: 'complete', progress: 100 });
         

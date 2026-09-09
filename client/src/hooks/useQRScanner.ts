@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback, RefObject } from 'react';
 import { QRCodeResult } from '@light-drop/shared/types';
 
+const POOL_SIZE = Math.min(4, typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 2);
+
 interface UseQRScannerOptions {
   onDecode?: (result: QRCodeResult) => void;
   scanInterval?: number;
@@ -27,13 +29,16 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
-  const workerRef = useRef<Worker | null>(null);
+  
+  const workersRef = useRef<Worker[]>([]);
+  const busyRef = useRef<boolean[]>([]);
+  const nextWorkerRef = useRef(0);
+  
   const isScanningRef = useRef(false);
   const animationRef = useRef<number>();
   const scanIntervalRef = useRef<ReturnType<typeof setTimeout>>();
   const pendingIdRef = useRef(0);
   const onDecodeRef = useRef(onDecode);
-  const isWorkerBusyRef = useRef(false);
   
   const isStartingRef = useRef(false);
 
@@ -44,31 +49,46 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
   
   useEffect(() => {
     if (typeof Worker !== 'undefined') {
-      workerRef.current = new Worker(new URL('../workers/qrDecoder.worker.ts', import.meta.url), { type: 'module' });
-      
-      workerRef.current.onmessage = (event) => {
-        isWorkerBusyRef.current = false;
-        const { id, data, binaryData, location } = event.data;
-        if (data || binaryData) {
-          const result: QRCodeResult = {
-            data: data || '',
-            binaryData: binaryData || undefined,
-            location,
-          };
-          setLastResult(result);
-          onDecodeRef.current?.(result);
-        }
-      };
-      
-      workerRef.current.onerror = (err) => {
-        isWorkerBusyRef.current = false;
-        console.error('QR Worker error:', err);
-        setError('QR decoder worker error');
-      };
+      const workers: Worker[] = [];
+      const busys: boolean[] = [];
+      for (let i = 0; i < POOL_SIZE; i++) {
+        const worker = new Worker(new URL('../workers/qrDecoder.worker.ts', import.meta.url), { type: 'module' });
+        
+        worker.onmessage = (event) => {
+          busyRef.current[i] = false;
+          // Thread safety: Out-of-order results from different workers are safe because
+          // FountainDecoder.addSymbol() is keyed by seed (sequence number). Duplicate
+          // frames are detected via seen.has(seq), and belief propagation in resolve()
+          // is deterministic regardless of insertion order.
+          const { id, data, binaryData, location } = event.data;
+          if (data || binaryData) {
+            const result: QRCodeResult = {
+              data: data || '',
+              binaryData: binaryData || undefined,
+              location,
+            };
+            setLastResult(result);
+            onDecodeRef.current?.(result);
+          }
+        };
+        
+        worker.onerror = (err) => {
+          busyRef.current[i] = false;
+          console.error('QR Worker error:', err);
+          setError('QR decoder worker error');
+        };
+        
+        workers.push(worker);
+        busys.push(false);
+      }
+      workersRef.current = workers;
+      busyRef.current = busys;
     }
     
     return () => {
-      workerRef.current?.terminate();
+      workersRef.current.forEach(worker => worker.terminate());
+      workersRef.current = [];
+      busyRef.current = [];
     };
   }, []);
   
@@ -76,13 +96,22 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const context = contextRef.current;
-    const worker = workerRef.current;
+    const workers = workersRef.current;
     
-    if (!video || !canvas || !context || !worker || video.readyState !== video.HAVE_ENOUGH_DATA) {
+    if (!video || !canvas || !context || workers.length === 0 || video.readyState !== video.HAVE_ENOUGH_DATA) {
       return;
     }
     
-    if (isWorkerBusyRef.current) {
+    let freeWorkerIndex = -1;
+    for (let i = 0; i < POOL_SIZE; i++) {
+      const idx = (nextWorkerRef.current + i) % POOL_SIZE;
+      if (!busyRef.current[idx]) {
+        freeWorkerIndex = idx;
+        break;
+      }
+    }
+    
+    if (freeWorkerIndex === -1) {
       return;
     }
     
@@ -107,8 +136,10 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
     const imageData = context.getImageData(0, 0, w, h);
     const id = ++pendingIdRef.current;
     
-    isWorkerBusyRef.current = true;
-    worker.postMessage({ type: 'decode', imageData, id });
+    busyRef.current[freeWorkerIndex] = true;
+    workers[freeWorkerIndex].postMessage({ type: 'decode', imageData, id });
+    
+    nextWorkerRef.current = (freeWorkerIndex + 1) % POOL_SIZE;
   }, []);
   
   const startScanning = useCallback(async () => {

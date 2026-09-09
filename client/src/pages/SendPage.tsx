@@ -8,6 +8,7 @@ import { QRTransmissionEngine } from '@/components/sender/QRTransmissionEngine';
 import { prepareTransfer, getTransferEstimates, PreparedTransfer } from '@/lib/protocol';
 import { useTransferStore } from '@/stores/transferStore';
 import { useToast } from '@/hooks/useToast';
+import { optimizeImageForTransfer } from '@/lib/image/optimizeImage';
 
 export function SendPage() {
   const { toast } = useToast();
@@ -25,19 +26,31 @@ export function SendPage() {
   const [isProcessing, setIsProcessing] = React.useState(false);
   const [prepared, setPrepared] = React.useState<PreparedTransfer | null>(null);
   const [estimates, setEstimates] = React.useState<any>(null);
+  const [optimizeImages, setOptimizeImages] = React.useState(true);
+  const [originalFileSize, setOriginalFileSize] = React.useState<number | null>(null);
 
-  const onDrop = React.useCallback((acceptedFiles: File[]) => {
+  const onDrop = React.useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
-      const file = acceptedFiles[0];
+      let file = acceptedFiles[0];
       if (file.size > 500 * 1024 * 1024) {
         toast({ title: 'File too large', description: 'Maximum file size is 500MB', variant: 'destructive' });
         return;
+      }
+      if (file.type.startsWith('image/') && optimizeImages) {
+        setOriginalFileSize(file.size);
+        const optimized = await optimizeImageForTransfer(file);
+        if (optimized.size === file.size) {
+           setOriginalFileSize(null);
+        }
+        file = optimized;
+      } else {
+        setOriginalFileSize(null);
       }
       setSelectedFile(file);
       setSendMode('file');
       setEstimates(getTransferEstimates(file.size, config));
     }
-  }, [config, toast]);
+  }, [config, toast, optimizeImages]);
 
   React.useEffect(() => {
     if (sendMode === 'file' && selectedFile) {
@@ -177,7 +190,13 @@ export function SendPage() {
             </span>
             <span className="min-w-0 break-all text-lightdrop-accent font-bold flex flex-col">
               <span>{selectedFile.name}</span>
-              <span className="text-[11px] text-lightdrop-muted">{formatFileSize(selectedFile.size)}</span>
+              <span className="text-[11px] text-lightdrop-muted">
+                {originalFileSize && originalFileSize !== selectedFile.size ? (
+                  <span className="text-lightdrop-green text-[11px]">{formatFileSize(originalFileSize)} → {formatFileSize(selectedFile.size)}</span>
+                ) : (
+                  formatFileSize(selectedFile.size)
+                )}
+              </span>
             </span>
           </div>
         )}
@@ -188,6 +207,16 @@ export function SendPage() {
               Transfer settings
             </summary>
             
+            <label className="flex items-center gap-2 mt-3 mb-2 font-mono text-[11px] text-lightdrop-muted cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={optimizeImages} 
+                onChange={(e) => setOptimizeImages(e.target.checked)} 
+                className="cursor-pointer"
+              />
+              Optimize image before sending (recommended)
+            </label>
+
             <div className="flex flex-wrap gap-x-[18px] gap-y-[10px] pt-[10px]">
               <label className="flex flex-col gap-[3px] text-[11px] text-lightdrop-muted uppercase tracking-[0.08em]">
                 <span>Block Size</span>

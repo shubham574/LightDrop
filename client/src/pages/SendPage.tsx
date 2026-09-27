@@ -9,6 +9,12 @@ import { prepareTransfer, getTransferEstimates, PreparedTransfer } from '@/lib/p
 import { useTransferStore } from '@/stores/transferStore';
 import { useToast } from '@/hooks/useToast';
 import { optimizeImageForTransfer } from '@/lib/image/optimizeImage';
+import {
+  encodeSimpleText,
+  isSimpleTextEligible,
+  MAX_SIMPLE_TEXT_BYTES,
+} from '@/lib/simpleTextTransfer';
+import { QRDisplay } from '@/components/qr/QRDisplay';
 
 export function SendPage() {
   const { toast } = useToast();
@@ -28,6 +34,9 @@ export function SendPage() {
   const [estimates, setEstimates] = React.useState<any>(null);
   const [optimizeImages, setOptimizeImages] = React.useState(true);
   const [originalFileSize, setOriginalFileSize] = React.useState<number | null>(null);
+
+  // Simple text mode: single static QR (no fountain needed)
+  const [simpleTextData, setSimpleTextData] = React.useState<Uint8Array | null>(null);
 
   const onDrop = React.useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
@@ -95,6 +104,17 @@ export function SendPage() {
 
   const handleStartTransmission = () => {
     if (sendMode === 'snippet' && textSnippet) {
+      // --- P4: Simple mode for short text — single static QR, instant ---
+      if (isSimpleTextEligible(textSnippet)) {
+        try {
+          const encoded = encodeSimpleText(textSnippet);
+          setSimpleTextData(encoded);
+          return;
+        } catch {
+          // Fallback to fountain mode if encoding fails
+        }
+      }
+      // Long text: fountain coding
       const snippetFile = new File([textSnippet], 'lightdrop-snippet.txt', { type: 'text/plain' });
       processFile(snippetFile);
     } else if (sendMode === 'file' && selectedFile) {
@@ -107,11 +127,50 @@ export function SendPage() {
     setSelectedFile(null);
     setTextSnippet('');
     setPrepared(null);
+    setSimpleTextData(null);
     setEstimates(null);
   };
 
   const handleSpeedChange = (speed: any) => setConfig({ speed });
 
+  // Simple text mode: show a single static QR
+  if (simpleTextData) {
+    return (
+      <div className="flex flex-col min-h-[100svh] bg-lightdrop-bg text-lightdrop-text font-mono font-[15px] leading-relaxed relative bg-[radial-gradient(circle_at_80%_-10%,rgba(88,200,255,0.07),transparent_35%)]">
+        <Header />
+        <main className="flex-1 flex flex-col items-center gap-4 p-5">
+          <section className="text-center mb-2">
+            <p className="text-lightdrop-accent text-[11px] font-bold tracking-[0.14em] uppercase mb-1">Single QR · Instant Send</p>
+            <h1 className="text-lightdrop-accent text-[16px] tracking-[0.12em] uppercase">Scan this code</h1>
+            <p className="mt-2 text-lightdrop-muted text-[13px] max-w-[480px] text-center">
+              This single QR contains your full text. Point the receiver's camera at it once to copy.
+            </p>
+          </section>
+
+          <div
+            className="bg-white rounded-[10px] p-5 flex items-center justify-center max-w-[92vw]"
+          >
+            <QRDisplay data={simpleTextData} className="object-contain" />
+          </div>
+
+          <div className="bg-lightdrop-panel border border-lightdrop-line rounded-lg p-3 max-w-[min(92vw,480px)] w-full">
+            <div className="text-lightdrop-muted text-[10px] uppercase tracking-[0.08em] mb-1">Text preview</div>
+            <div className="text-lightdrop-text text-[13px] break-words line-clamp-3">{textSnippet}</div>
+          </div>
+
+          <button
+            className="mt-2 px-6 py-3 border border-lightdrop-red text-lightdrop-red rounded-lg font-bold hover:bg-lightdrop-red/10 transition-colors cursor-pointer"
+            onClick={handleCancel}
+          >
+            Back
+          </button>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Fountain mode: animated QR stream
   if (prepared) {
     return (
       <div className="flex flex-col min-h-[100svh] bg-lightdrop-bg text-lightdrop-text font-mono font-[15px] leading-relaxed relative bg-[radial-gradient(circle_at_80%_-10%,rgba(88,200,255,0.07),transparent_35%)]">
@@ -166,6 +225,15 @@ export function SendPage() {
               value={textSnippet}
               onChange={(e) => setTextSnippet(e.target.value)}
             />
+            {textSnippet.length > 0 && (
+              <div className="text-[11px] text-lightdrop-muted text-right">
+                {new TextEncoder().encode(textSnippet).length <= MAX_SIMPLE_TEXT_BYTES ? (
+                  <span className="text-lightdrop-green">⚡ Instant single-QR send</span>
+                ) : (
+                  <span>Fountain mode (animated QR)</span>
+                )}
+              </div>
+            )}
           </div>
         ) : !selectedFile ? (
           <div {...getRootProps()} className={cn(
@@ -217,51 +285,56 @@ export function SendPage() {
               Optimize image before sending (recommended)
             </label>
 
-            <div className="flex flex-wrap gap-x-[18px] gap-y-[10px] pt-[10px]">
-              <label className="flex flex-col gap-[3px] text-[11px] text-lightdrop-muted uppercase tracking-[0.08em]">
-                <span>Block Size</span>
-                <select 
-                  value={config.blockSize}
-                  onChange={(e) => setConfig({ blockSize: parseInt(e.target.value) })}
-                  className="font-mono text-[16px] text-lightdrop-text bg-lightdrop-bg border border-lightdrop-line rounded-md px-[8px] py-[5px]"
-                >
-                  <option value={64}>64 bytes</option>
-                  <option value={128}>128 bytes</option>
-                  <option value={256}>256 bytes (default)</option>
-                  <option value={512}>512 bytes</option>
-                  <option value={1024}>1 KB</option>
-                  <option value={1536}>1.5 KB</option>
-                  <option value={2048}>2 KB — best lighting</option>
-                </select>
-                <span className="text-[10px] text-lightdrop-muted mt-1">Larger blocks need brighter, steadier, closer scan</span>
-              </label>
+            {/* Only show fountain settings for file mode or long text */}
+            {(sendMode === 'file' || !isSimpleTextEligible(textSnippet)) && (
+              <div className="flex flex-wrap gap-x-[18px] gap-y-[10px] pt-[10px]">
+                <label className="flex flex-col gap-[3px] text-[11px] text-lightdrop-muted uppercase tracking-[0.08em]">
+                  <span>Block Size</span>
+                  <select 
+                    value={config.blockSize}
+                    onChange={(e) => setConfig({ blockSize: parseInt(e.target.value) })}
+                    className="font-mono text-[16px] text-lightdrop-text bg-lightdrop-bg border border-lightdrop-line rounded-md px-[8px] py-[5px]"
+                  >
+                    <option value={64}>64 bytes</option>
+                    <option value={128}>128 bytes</option>
+                    <option value={256}>256 bytes (default)</option>
+                    <option value={512}>512 bytes</option>
+                    <option value={1024}>1 KB</option>
+                    <option value={1536}>1.5 KB</option>
+                    <option value={2048}>2 KB — best lighting</option>
+                  </select>
+                  <span className="text-[10px] text-lightdrop-muted mt-1">Larger blocks need brighter, steadier, closer scan</span>
+                </label>
 
-              <label className="flex flex-col gap-[3px] text-[11px] text-lightdrop-muted uppercase tracking-[0.08em]">
-                <span>Speed</span>
-                <select 
-                  value={config.speed}
-                  onChange={(e) => setConfig({ speed: e.target.value as any })}
-                  className="font-mono text-[16px] text-lightdrop-text bg-lightdrop-bg border border-lightdrop-line rounded-md px-[8px] py-[5px]"
-                >
-                  <option value="COMPATIBILITY">Compatibility (5 FPS)</option>
-                  <option value="BALANCED">Balanced (10 FPS)</option>
-                  <option value="FAST">Fast (15 FPS)</option>
-                  <option value="EXTREME">Extreme (30 FPS)</option>
-                  <option value="HYPER">Hyper (60 FPS)</option>
-                </select>
-              </label>
-            </div>
+                <label className="flex flex-col gap-[3px] text-[11px] text-lightdrop-muted uppercase tracking-[0.08em]">
+                  <span>Speed</span>
+                  <select 
+                    value={config.speed}
+                    onChange={(e) => setConfig({ speed: e.target.value as any })}
+                    className="font-mono text-[16px] text-lightdrop-text bg-lightdrop-bg border border-lightdrop-line rounded-md px-[8px] py-[5px]"
+                  >
+                    <option value="COMPATIBILITY">Compatibility (5 FPS)</option>
+                    <option value="BALANCED">Balanced (10 FPS)</option>
+                    <option value="FAST">Fast (15 FPS)</option>
+                    <option value="EXTREME">Extreme (30 FPS)</option>
+                    <option value="HYPER">Hyper (60 FPS)</option>
+                  </select>
+                </label>
+              </div>
+            )}
 
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-[18px] gap-y-[10px] mt-[10px] pt-[9px] border-t border-lightdrop-line">
-              <div className="min-w-0">
-                <dt className="text-lightdrop-muted text-[10px] tracking-[0.08em] uppercase">Source Blocks</dt>
-                <dd className="m-[2px_0_0] text-lightdrop-text text-[13px] break-all">{estimates?.totalBlocks || '—'}</dd>
+            {(sendMode === 'file' || !isSimpleTextEligible(textSnippet)) && estimates && (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-[18px] gap-y-[10px] mt-[10px] pt-[9px] border-t border-lightdrop-line">
+                <div className="min-w-0">
+                  <dt className="text-lightdrop-muted text-[10px] tracking-[0.08em] uppercase">Source Blocks</dt>
+                  <dd className="m-[2px_0_0] text-lightdrop-text text-[13px] break-all">{estimates?.totalBlocks || '—'}</dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-lightdrop-muted text-[10px] tracking-[0.08em] uppercase">Est. Duration</dt>
+                  <dd className="m-[2px_0_0] text-lightdrop-text text-[13px] break-all">{estimates?.estimatedDuration || '—'}</dd>
+                </div>
               </div>
-              <div className="min-w-0">
-                <dt className="text-lightdrop-muted text-[10px] tracking-[0.08em] uppercase">Est. Duration</dt>
-                <dd className="m-[2px_0_0] text-lightdrop-text text-[13px] break-all">{estimates?.estimatedDuration || '—'}</dd>
-              </div>
-            </div>
+            )}
 
             <div className="mt-6 flex justify-center">
               <button
@@ -269,7 +342,11 @@ export function SendPage() {
                 onClick={handleStartTransmission}
                 disabled={isProcessing}
               >
-                {isProcessing ? 'Preparing...' : 'Start transmission'}
+                {isProcessing
+                  ? 'Preparing...'
+                  : sendMode === 'snippet' && isSimpleTextEligible(textSnippet)
+                    ? '⚡ Show QR'
+                    : 'Start transmission'}
               </button>
             </div>
           </details>

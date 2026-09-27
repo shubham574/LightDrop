@@ -60,7 +60,7 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
           // FountainDecoder.addSymbol() is keyed by seed (sequence number). Duplicate
           // frames are detected via seen.has(seq), and belief propagation in resolve()
           // is deterministic regardless of insertion order.
-          const { id, data, binaryData, location } = event.data;
+          const { data, binaryData, location } = event.data;
           if (data || binaryData) {
             const result: QRCodeResult = {
               data: data || '',
@@ -163,9 +163,19 @@ export function useQRScanner(options: UseQRScannerOptions = {}): UseQRScannerRet
       }
       
       if (!canvasRef.current) {
-        canvasRef.current = document.createElement('canvas');
+        (canvasRef as React.MutableRefObject<HTMLCanvasElement>).current = document.createElement('canvas');
       }
-      contextRef.current = canvasRef.current.getContext('2d', { willReadFrequently: true });
+
+      // --- FIX P3: Guard against null canvas context (Firefox + certain environments) ---
+      const ctx = canvasRef.current!.getContext('2d', { willReadFrequently: true });
+      if (!ctx) {
+        stream.getTracks().forEach(t => t.stop());
+        setError('Failed to get canvas 2D context. Try a different browser.');
+        isScanningRef.current = false;
+        setIsScanning(false);
+        return;
+      }
+      contextRef.current = ctx;
       
       isScanningRef.current = true;
       setIsScanning(true);

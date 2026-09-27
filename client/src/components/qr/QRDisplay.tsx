@@ -60,15 +60,51 @@ export function QRDisplay({ data, size, className, onLoad, onError }: QRDisplayP
   const workerRef = React.useRef<Worker | null>(null);
   const pendingIdRef = React.useRef<number>(0);
 
+  // --- FIX: Single persistent onmessage dispatcher via a pending-callbacks Map ---
+  // Previously: each data-change added addEventListener('message', onMessage), but
+  // cleanup only set mounted=false (never removed the listener). At 30 fps this
+  // accumulated hundreds of stale listeners → worker became unresponsive → blank QR.
+  // Now: one permanent worker.onmessage dispatches to registered per-request callbacks.
+  const pendingCallbacksRef = React.useRef<Map<number, (e: MessageEvent) => void>>(new Map());
+
+  // Keep latest onLoad/onError without recreating effects
+  const onLoadRef = React.useRef(onLoad);
+  const onErrorRef = React.useRef(onError);
+  React.useEffect(() => { onLoadRef.current = onLoad; }, [onLoad]);
+  React.useEffect(() => { onErrorRef.current = onError; }, [onError]);
+
+  // Create the worker once; set the single persistent dispatcher
   React.useEffect(() => {
     if (typeof Worker !== 'undefined') {
-      workerRef.current = new Worker(new URL('../../workers/qrEncoder.worker.ts', import.meta.url), { type: 'module' });
+      const worker = new Worker(
+        new URL('../../workers/qrEncoder.worker.ts', import.meta.url),
+        { type: 'module' }
+      );
+
+      // One handler, dispatches by id — no per-render addEventListener needed
+      worker.onmessage = (e: MessageEvent) => {
+        const cb = pendingCallbacksRef.current.get(e.data.id);
+        if (cb) {
+          pendingCallbacksRef.current.delete(e.data.id);
+          cb(e);
+        }
+      };
+
+      worker.onerror = () => {
+        // Clear all pending callbacks on fatal worker error
+        pendingCallbacksRef.current.clear();
+      };
+
+      workerRef.current = worker;
     }
     return () => {
+      pendingCallbacksRef.current.clear();
       workerRef.current?.terminate();
+      workerRef.current = null;
     };
   }, []);
 
+  // Re-generate QR whenever data or size changes
   React.useEffect(() => {
     if (!data || !canvasRef.current) return;
     if (data instanceof Uint8Array && data.length === 0) return;
@@ -84,60 +120,52 @@ export function QRDisplay({ data, size, className, onLoad, onError }: QRDisplayP
     const ecLevel = DEFAULT_QR_ERROR_CORRECTION as 'L' | 'M' | 'Q' | 'H';
     const baseOptimalSize = size || getOptimalQRSize(dataLength, ecLevel);
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-    const renderSize = Math.round(baseOptimalSize * dpr);
     const margin = 2;
+    const id = ++pendingIdRef.current;
 
     if (workerRef.current) {
-      const id = ++pendingIdRef.current;
-      
-      const onMessage = (e: MessageEvent) => {
-        if (e.data.id === id) {
-          workerRef.current?.removeEventListener('message', onMessage);
-          
-          if (mounted && canvasRef.current) {
-            if (e.data.error) {
-              const err = new Error(e.data.error);
-              setError(err);
-              setIsLoading(false);
-              onError?.(err);
-            } else {
-              renderModules(
-                canvasRef.current,
-                e.data.modules,
-                e.data.size,
-                margin,
-                baseOptimalSize,
-                dpr
-              );
-              hasRenderedRef.current = true;
-              setIsLoading(false);
-              onLoad?.();
-            }
-          }
-        }
-      };
-      
-      workerRef.current.addEventListener('message', onMessage);
-      
-      const plainData = data instanceof Uint8Array 
-        ? Array.from(data) 
+      const plainData = data instanceof Uint8Array
+        ? Array.from(data)
         : Array.from(new TextEncoder().encode(data));
+
+      // Register a callback for this specific request id
+      pendingCallbacksRef.current.set(id, (e: MessageEvent) => {
+        if (!mounted || !canvasRef.current) return;
+
+        if (e.data.error) {
+          const err = new Error(e.data.error);
+          setError(err);
+          setIsLoading(false);
+          onErrorRef.current?.(err);
+        } else {
+          renderModules(
+            canvasRef.current,
+            e.data.modules,
+            e.data.size,
+            margin,
+            baseOptimalSize,
+            dpr
+          );
+          hasRenderedRef.current = true;
+          setIsLoading(false);
+          onLoadRef.current?.();
+        }
+      });
 
       workerRef.current.postMessage({
         type: 'generate',
         id,
         data: plainData,
         errorCorrectionLevel: ecLevel,
-        margin
+        margin,
       });
     } else {
+      // Fallback: main-thread generation (Worker unavailable)
+      const renderSize = Math.round(baseOptimalSize * dpr);
       generateQRCodeCanvas(data, canvasRef.current, {
         width: renderSize,
         margin,
-        color: {
-          dark: '#000000',
-          light: '#ffffff',
-        },
+        color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: ecLevel,
       })
         .then(() => {
@@ -146,22 +174,24 @@ export function QRDisplay({ data, size, className, onLoad, onError }: QRDisplayP
             canvasRef.current.style.height = `${baseOptimalSize}px`;
             hasRenderedRef.current = true;
             setIsLoading(false);
-            onLoad?.();
+            onLoadRef.current?.();
           }
         })
         .catch((err) => {
           if (mounted) {
             setError(err);
             setIsLoading(false);
-            onError?.(err);
+            onErrorRef.current?.(err);
           }
         });
     }
 
     return () => {
       mounted = false;
+      // Deregister the pending callback — prevents stale handler from firing later
+      pendingCallbacksRef.current.delete(id);
     };
-  }, [data, size, onLoad, onError]);
+  }, [data, size]);
 
   return (
     <div className={cn('relative inline-flex items-center justify-center overflow-hidden', className)}>

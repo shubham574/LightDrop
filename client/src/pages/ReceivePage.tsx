@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/useToast';
 import { Header, Footer } from './LandingPage';
 import { TransferManifest, QRCodeResult } from '@light-drop/shared/types';
 import { hashTransferId } from '@light-drop/shared/protocol';
+import { decodeSimpleText } from '@/lib/simpleTextTransfer';
 
 export function ReceivePage() {
   const { toast } = useToast();
@@ -29,9 +30,33 @@ export function ReceivePage() {
   const manifestRef = React.useRef<TransferManifest | null>(null);
   const reconstructingRef = React.useRef(false);
 
+  // --- FIX P1: Use refs for mutable counters to avoid stale closures ---
+  // Previously, handleDecodedFrame captured receiver.uniqueSymbolsReceived etc. from
+  // the closure, which meant rapid successive calls used stale/overwritten values.
+  const uniqueReceivedRef = React.useRef(0);
+  const dupSkippedRef = React.useRef(0);
+  const startTimeRef = React.useRef<number | undefined>(undefined);
+
+  // Use a ref for stopScanning so it can be called inside handleDecodedFrame
+  // even though useQRScanner is called after (avoids circular dependency)
+  const stopScanningRef = React.useRef<() => void>(() => {});
+
   const handleDecodedFrame = React.useCallback(async (result: QRCodeResult) => {
     const binaryData = result.binaryData;
     if (!binaryData || binaryData.length === 0) return;
+
+    // --- P4: Detect simple text frames (magic: "LDTX") before fountain parsing ---
+    const simpleText = decodeSimpleText(binaryData);
+    if (simpleText !== null) {
+      // Already complete in one scan — show immediately
+      const blob = new Blob([simpleText], { type: 'text/plain' });
+      setReconstructedFile(blob);
+      setSnippetText(simpleText);
+      setReceiverState({ status: 'complete', progress: 100 });
+      stopScanningRef.current();
+      toast({ title: 'Text Received', description: 'Text snippet received instantly (single QR).' });
+      return;
+    }
 
     const decoded = decodeBinaryFrame(binaryData);
     if (!decoded) return;
@@ -41,6 +66,9 @@ export function ReceivePage() {
       
       if (manifestRef.current && manifestRef.current.transferId !== manifest.transferId) {
         decoderRef.current = null;
+        uniqueReceivedRef.current = 0;
+        dupSkippedRef.current = 0;
+        startTimeRef.current = undefined;
       }
 
       if (!manifestRef.current || manifestRef.current.transferId !== manifest.transferId) {
@@ -50,6 +78,11 @@ export function ReceivePage() {
         const newDecoder = new FountainDecoder(manifest.totalBlocks, manifest.blockSize);
         decoderRef.current = newDecoder;
         setDecoder(newDecoder);
+
+        const now = Date.now();
+        startTimeRef.current = now;
+        uniqueReceivedRef.current = 0;
+        dupSkippedRef.current = 0;
         
         setReceiverState({
           transferId: manifest.transferId,
@@ -58,7 +91,7 @@ export function ReceivePage() {
           fileSize: manifest.fileSize,
           totalBlocks: manifest.totalBlocks,
           status: 'receiving',
-          startTime: Date.now(),
+          startTime: now,
           decodedBlocks: 0,
           uniqueSymbolsReceived: 0,
           duplicateSymbolsSkipped: 0,
@@ -80,23 +113,28 @@ export function ReceivePage() {
       const contributed = currentDecoder.addSymbol(decoded.symbol.seed, decoded.symbol.data);
       
       if (contributed) {
+        // --- FIX P1: Use refs for counters so there is no stale-closure issue ---
+        uniqueReceivedRef.current++;
+        
+        const elapsed = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
+        let estimatedTimeRemaining: number | undefined;
+        if (elapsed > 0 && currentDecoder.progress > 0 && currentDecoder.progress < 1) {
+          const rate = currentDecoder.decodedCount / (elapsed / 1000);
+          const remaining = manifest.totalBlocks - currentDecoder.decodedCount;
+          estimatedTimeRemaining = remaining / Math.max(rate, 0.001) * 1000;
+        }
+
         setReceiverState({
           decodedBlocks: currentDecoder.decodedCount,
-          uniqueSymbolsReceived: (receiver.uniqueSymbolsReceived || 0) + 1,
+          uniqueSymbolsReceived: uniqueReceivedRef.current,
           progress: currentDecoder.progress * 100,
+          ...(estimatedTimeRemaining !== undefined ? { estimatedTimeRemaining } : {}),
         });
       } else {
+        dupSkippedRef.current++;
         setReceiverState({
-          duplicateSymbolsSkipped: (receiver.duplicateSymbolsSkipped || 0) + 1,
+          duplicateSymbolsSkipped: dupSkippedRef.current,
         });
-      }
-
-      if (receiver.startTime && currentDecoder.progress > 0 && currentDecoder.progress < 1) {
-        const elapsed = Date.now() - receiver.startTime;
-        const rate = currentDecoder.decodedCount / (elapsed / 1000);
-        const remaining = manifest.totalBlocks - currentDecoder.decodedCount;
-        const estimatedTimeRemaining = remaining / rate * 1000;
-        setReceiverState({ estimatedTimeRemaining });
       }
 
       if (currentDecoder.isComplete && !reconstructingRef.current) {
@@ -104,13 +142,20 @@ export function ReceivePage() {
         await attemptReconstruction(currentDecoder, manifest);
       }
     }
-  }, [receiver.startTime, receiver.uniqueSymbolsReceived, receiver.duplicateSymbolsSkipped, setReceiverState]);
+  // --- FIX P1: Only depend on setReceiverState and toast (both stable). All mutable values use refs ---
+  }, [setReceiverState, toast]);
 
   const { startScanning, stopScanning, isScanning, videoRef } = useQRScanner({
     onDecode: handleDecodedFrame,
     scanInterval: 50,
     enabled: !reconstructedFile,
   });
+
+  // Keep stopScanningRef up-to-date so handleDecodedFrame can call it
+  React.useEffect(() => {
+    stopScanningRef.current = stopScanning;
+  }, [stopScanning]);
+
 
   const attemptReconstruction = async (dec: FountainDecoder, manifest: TransferManifest) => {
     setIsReconstructing(true);
@@ -133,7 +178,8 @@ export function ReceivePage() {
         setReconstructedFile(blob);
         setReceiverState({ status: 'complete', progress: 100 });
         
-        if (manifest.fileName === 'lightdrop-snippet.txt') {
+        // --- FIX P2: Use mimeType for text detection, not fragile filename match ---
+        if (manifest.mimeType === 'text/plain') {
           try {
             const text = new TextDecoder().decode(fileData);
             setSnippetText(text);
@@ -142,8 +188,13 @@ export function ReceivePage() {
           }
         }
 
-        stopScanning();
-        toast({ title: 'Transfer Complete', description: manifest.fileName === 'lightdrop-snippet.txt' ? 'Text snippet received successfully' : `${manifest.fileName} received successfully` });
+        stopScanningRef.current();
+        toast({
+          title: 'Transfer Complete',
+          description: manifest.mimeType === 'text/plain'
+            ? 'Text snippet received successfully'
+            : `${manifest.fileName} received successfully`,
+        });
       } else {
         setReceiverState({ status: 'error', errorMessage: 'Checksum verification failed.' });
         toast({ title: 'Verification Failed', description: 'File integrity check failed.', variant: 'destructive' });
@@ -188,6 +239,9 @@ export function ReceivePage() {
     setReconstructedFile(null);
     setSnippetText(null);
     reconstructingRef.current = false;
+    uniqueReceivedRef.current = 0;
+    dupSkippedRef.current = 0;
+    startTimeRef.current = undefined;
     startScanning();
   };
 

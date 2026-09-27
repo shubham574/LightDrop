@@ -148,8 +148,8 @@ export function SendPage() {
             </p>
           </section>
 
-          <div className="bg-white rounded-[10px] p-5 flex items-center justify-center max-w-[92vw]">
-            <QRDisplay data={simpleTextData} className="object-contain" />
+          <div className="bg-white rounded-[10px] p-4 sm:p-5 flex items-center justify-center w-[min(92vw,55vh)] aspect-square mx-auto">
+            <QRDisplay data={simpleTextData} className="w-full h-full object-contain" />
           </div>
 
           <div className="bg-lightdrop-panel border border-lightdrop-line rounded-lg p-3 max-w-[min(92vw,480px)] w-full">

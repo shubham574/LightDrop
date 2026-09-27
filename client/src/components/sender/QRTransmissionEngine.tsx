@@ -114,13 +114,17 @@ export function QRTransmissionEngine({
       )}
 
       <div 
-        className={`bg-white rounded-[10px] flex items-center justify-center cursor-pointer overflow-hidden ${isFull ? 'w-[100vmin] h-[100vmin] max-w-[100%] max-h-[100%] p-8 rounded-none' : 'max-w-[92vw] p-5'}`}
+        className={`bg-white flex items-center justify-center cursor-pointer overflow-hidden ${
+          isFull 
+            ? 'w-[100vmin] h-[100vmin] max-w-[100%] max-h-[100%] p-8 rounded-none' 
+            : 'w-[min(92vw,55vh)] aspect-square rounded-[10px] p-4 sm:p-5 mx-auto'
+        }`}
         onClick={() => setIsFullscreen(!isFull)}
         title={isFull ? "Click to exit fullscreen" : "Click to fullscreen"}
       >
         <QRDisplay
           data={currentFrameData}
-          className="object-contain"
+          className="w-full h-full object-contain"
         />
       </div>
 

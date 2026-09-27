@@ -304,13 +304,13 @@ export function ReceivePage() {
           </div>
         )}
 
-        {reconstructedFile && currentManifest && (
+        {reconstructedFile && (
           <div className="w-[min(92vw,640px)] flex flex-col items-center gap-[14px] mt-4">
-            <div className="text-lightdrop-text text-[22px] font-bold">SHA-256 verified ✓</div>
-            
+            {/* Simple text / fountain text: show copy UI */}
             {snippetText !== null ? (
               <>
-                <p className="text-lightdrop-muted">Text Snippet Received</p>
+                <div className="text-lightdrop-text text-[22px] font-bold">✓ Text Received</div>
+                <p className="text-lightdrop-muted text-[13px]">Text snippet received successfully</p>
                 <div className="w-full relative group">
                   <textarea
                     readOnly
@@ -325,8 +325,10 @@ export function ReceivePage() {
                   Copy to Clipboard
                 </button>
               </>
-            ) : (
+            ) : currentManifest ? (
+              /* Fountain file transfer: show SHA-256 verified + download */
               <>
+                <div className="text-lightdrop-text text-[22px] font-bold">SHA-256 verified ✓</div>
                 <p className="text-lightdrop-muted">File: {currentManifest.fileName} ({formatFileSize(currentManifest.fileSize)})</p>
                 <button 
                   onClick={handleDownload}
@@ -335,7 +337,7 @@ export function ReceivePage() {
                   Save {currentManifest.fileName}
                 </button>
               </>
-            )}
+            ) : null}
             
             <button 
               onClick={handleReset}
